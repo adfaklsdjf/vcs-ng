@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+*.egg-info/
+.omc/
+
+# reference clone of the original tool (has its own .git)
+video-contact-sheet/
+
+# local media / generated sheets at repo root
+/*.webm
+/*.mkv
+/*.mp4
+/*.jpg
+/*.jpeg
+/*.png

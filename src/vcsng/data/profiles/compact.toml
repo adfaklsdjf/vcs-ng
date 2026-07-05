@@ -1,0 +1,11 @@
+# Dense mosaic of tiny captures (port of the original 'compact' profile)
+[capture]
+mode = "numcaps"
+numcaps = 72
+
+[layout]
+columns = 12
+height = 40
+padding = 0
+shadows = false
+timestamps = false

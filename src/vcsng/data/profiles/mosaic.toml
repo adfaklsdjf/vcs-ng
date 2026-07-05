@@ -1,0 +1,11 @@
+# Tight grid of small thumbnails (port of the original 'mosaic' profile)
+[capture]
+mode = "numcaps"
+numcaps = 20
+
+[layout]
+columns = 4
+height = 160
+padding = 0
+shadows = false
+timestamps = false

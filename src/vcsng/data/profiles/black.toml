@@ -1,0 +1,4 @@
+# White-on-black color scheme (port of the original 'black' profile)
+[style]
+bg_all = "black"
+fg_all = "white"

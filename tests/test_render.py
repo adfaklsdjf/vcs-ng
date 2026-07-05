@@ -1,0 +1,210 @@
+"""Structural tests for fonts, render primitives, and sheet assembly."""
+
+from __future__ import annotations
+
+import types
+from fractions import Fraction
+
+import pytest
+from PIL import Image
+
+from vcsng.config import Settings
+from vcsng.errors import UsageError
+from vcsng.fonts import _bundled_path, load_font
+from vcsng.render import (
+    apply_timestamp,
+    drop_shadow,
+    heading_block,
+    parse_color,
+    placeholder_tile,
+    scale_pts,
+    text_block,
+)
+from vcsng.sheet import build_sheet
+
+
+# --- parse_color ---------------------------------------------------------
+
+def test_parse_color_name():
+    assert parse_color("black") == (0, 0, 0, 255)
+
+
+def test_parse_color_hex6():
+    assert parse_color("#afcd7a") == (0xAF, 0xCD, 0x7A, 255)
+
+
+def test_parse_color_hex8():
+    assert parse_color("#000000aa") == (0, 0, 0, 170)
+
+
+def test_parse_color_named2():
+    r = parse_color("slategray")
+    assert len(r) == 4 and r[3] == 255
+
+
+def test_parse_color_invalid():
+    with pytest.raises(UsageError):
+        parse_color("not-a-color")
+
+
+# --- scale_pts -----------------------------------------------------------
+
+def test_scale_pts_thresholds():
+    assert scale_pts(36, 330) == 24
+    assert scale_pts(36, 150) == 12
+    assert scale_pts(14, 500) == 14
+
+
+def test_scale_pts_floor():
+    assert scale_pts(9, 150) == 7  # 9//3=3 -> floored to 7
+
+
+# --- drop_shadow ---------------------------------------------------------
+
+def test_drop_shadow_dims():
+    img = Image.new("RGBA", (40, 30), (255, 0, 0, 255))
+    out = drop_shadow(img, radius=2, offset=(4, 4), opacity=0.5)
+    assert out.width == 40 + 4 + 2 * 2
+    assert out.height == 30 + 4 + 2 * 2
+
+
+# --- apply_timestamp -----------------------------------------------------
+
+def test_apply_timestamp_changes_pixels():
+    thumb = Image.new("RGBA", (200, 120), (10, 20, 30, 255))
+    before = thumb.copy()
+    font = load_font("DejaVuSans", 14)
+    apply_timestamp(thumb, "00:20.00", font, "white", "black")
+    # bottom-right region changed
+    assert thumb.getpixel((190, 110)) != before.getpixel((190, 110))
+    # top-left untouched
+    assert thumb.getpixel((5, 5)) == (10, 20, 30, 255)
+
+
+def test_apply_timestamp_alpha_bg_translucent():
+    thumb = Image.new("RGBA", (200, 120), (200, 50, 50, 255))
+    font = load_font("DejaVuSans", 14)
+    apply_timestamp(thumb, "00:20.00", font, "white", "#00000080")
+    # sample a pixel in the box area away from glyphs: underlying red still bleeds
+    px = thumb.getpixel((198, 118))
+    assert px[0] > 0  # some red channel survives the translucent black box
+
+
+# --- text_block / heading_block ------------------------------------------
+
+def test_text_block_dims():
+    font = load_font("DejaVuSans", 14)
+    img = text_block(["hello", "world"], font, "black", "white", 300)
+    assert img.width == 300
+    assert img.height > 0
+
+
+def test_text_block_center_and_right():
+    font = load_font("DejaVuSans", 14)
+    for align in ("left", "center", "right"):
+        img = text_block(["x"], font, "black", "white", 100, align=align)
+        assert img.width == 100
+
+
+def test_heading_block_dims():
+    font = load_font("DejaVuSans", 14)
+    img = heading_block(["a", "b"], ["c", "d"], font, "black", "#afcd7a", 400)
+    assert img.width == 400
+    assert img.height > 18
+
+
+def test_heading_block_expands_for_wide_text():
+    font = load_font("DejaVuSans", 14)
+    wide = "x" * 400
+    img = heading_block([wide], [wide], font, "black", "#afcd7a", 100)
+    assert img.width > 100
+
+
+# --- load_font -----------------------------------------------------------
+
+def test_load_font_by_path():
+    f = load_font(_bundled_path(), 12)
+    assert f is not None
+
+
+def test_load_font_garbage_falls_back():
+    f = load_font("no-such-font-xyz", 12)
+    assert f is not None  # bundled fallback, no raise
+
+
+def test_load_font_lru_cache():
+    a = load_font("DejaVuSans", 20)
+    b = load_font("DejaVuSans", 20)
+    assert a is b
+
+
+# --- placeholder_tile ----------------------------------------------------
+
+def test_placeholder_tile():
+    t = placeholder_tile((160, 90))
+    assert t.size == (160, 90)
+    assert t.getpixel((0, 0)) == (0x33, 0x33, 0x33, 255)
+
+
+# --- build_sheet ---------------------------------------------------------
+
+def _info():
+    from pathlib import Path
+
+    return types.SimpleNamespace(
+        path=Path("/videos/sample movie.mkv"),
+        duration=3903.0,
+        width=1280,
+        height=720,
+        sar=None,
+        dar=None,
+        fps=23.976,
+        vcodec="h264",
+        acodec="aac",
+        audio_channels=2,
+        rotation=0,
+        file_size=734003200,
+    )
+
+
+def _frames(n=5, with_none=False):
+    colors = [(200, 50, 50), (50, 200, 50), (50, 50, 200), (200, 200, 50), (50, 200, 200)]
+    out = []
+    for i in range(n):
+        if with_none and i == 2:
+            out.append((float(i * 60), None))
+        else:
+            out.append((float(i * 60), Image.new("RGB", (320, 180), colors[i % len(colors)])))
+    return out
+
+
+def test_build_sheet_basic():
+    s = Settings(columns=3, height=90, timestamps=True, shadows=True)
+    sheet = build_sheet(_info(), _frames(5), s, Fraction(16, 9))
+    assert isinstance(sheet, Image.Image)
+    assert sheet.mode == "RGBA"
+    # grid region not uniform (thumbnails pasted)
+    colors = {sheet.getpixel((x, sheet.height // 2)) for x in range(0, sheet.width, 20)}
+    assert len(colors) > 1
+
+
+def test_build_sheet_width_is_max_of_grid_and_heading():
+    s = Settings(columns=3, height=90, timestamps=True, shadows=True)
+    sheet = build_sheet(_info(), _frames(5), s, Fraction(16, 9))
+    # heading with a long filename can force width wider than grid, or grid wins.
+    # Either way width must be >= a single cell.
+    assert sheet.width >= 90 * 16 // 9
+
+
+def test_build_sheet_placeholder_path():
+    s = Settings(columns=3, height=90, timestamps=True, shadows=False)
+    sheet = build_sheet(_info(), _frames(5, with_none=True), s, Fraction(16, 9))
+    assert isinstance(sheet, Image.Image)
+
+
+def test_build_sheet_anonymous_vs_named_height():
+    frames = _frames(5)
+    named = build_sheet(_info(), frames, Settings(columns=3, height=90, anonymous=False), Fraction(16, 9))
+    anon = build_sheet(_info(), frames, Settings(columns=3, height=90, anonymous=True), Fraction(16, 9))
+    # named footer has 2 lines, anonymous 1 -> different height
+    assert named.height != anon.height
