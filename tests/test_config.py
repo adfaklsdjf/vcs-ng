@@ -18,6 +18,18 @@ def test_precedence_defaults_only():
     assert s == Settings()
 
 
+def test_credit_defaults_true_and_config_override(tmp_path):
+    assert build_settings({}, no_config=True).credit is True
+    config = write_toml(tmp_path / "config.toml", "[general]\ncredit = false\n")
+    assert build_settings({}, config_path=config).credit is False
+
+
+def test_credit_cli_override(tmp_path):
+    # config on, CLI --no-credit off -> CLI wins
+    config = write_toml(tmp_path / "config.toml", "[general]\ncredit = true\n")
+    assert build_settings({"credit": False}, config_path=config).credit is False
+
+
 def test_precedence_config_then_profile_then_cli(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     config = write_toml(

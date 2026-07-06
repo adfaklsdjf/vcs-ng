@@ -61,13 +61,19 @@ def _heading(info, s: Settings, width: int) -> Image.Image:
     return heading_block(left, right, font, s.fg_heading, s.bg_heading, width, border=9)
 
 
-def _footer(s: Settings, width: int) -> Image.Image:
-    font = load_font(s.font_sign, s.pts_sign)
-    if s.anonymous:
-        lines = [f"Created with {PROGRAM_SIGNATURE}"]
-    else:
+def _footer(s: Settings, width: int) -> Image.Image | None:
+    """Build the footer, or None when there's nothing left to show."""
+    lines: list[str] = []
+    if not s.anonymous:
         who = s.username or getpass.getuser()
-        lines = [f"{s.signature} {who}", f"with {PROGRAM_SIGNATURE}"]
+        lines.append(f"{s.signature} {who}")
+        if s.credit:
+            lines.append(f"with {PROGRAM_SIGNATURE}")
+    elif s.credit:
+        lines.append(f"Created with {PROGRAM_SIGNATURE}")
+    if not lines:
+        return None
+    font = load_font(s.font_sign, s.pts_sign)
     return text_block(
         lines, font, s.fg_sign, s.bg_sign, width, align="center", pad=(0, 4, 0, 4)
     )
@@ -137,7 +143,9 @@ def build_sheet(
         )
         parts.append(_widen(title, sheet_w, parse_color(s.bg_title)))
     parts.append(_widen(grid, sheet_w, bg_contact))
-    parts.append(_widen(_footer(s, sheet_w), sheet_w, parse_color(s.bg_sign)))
+    footer = _footer(s, sheet_w)
+    if footer is not None:
+        parts.append(_widen(footer, sheet_w, parse_color(s.bg_sign)))
 
     total_h = sum(p.height for p in parts)
     sheet = Image.new("RGBA", (sheet_w, max(total_h, 1)), bg_contact)

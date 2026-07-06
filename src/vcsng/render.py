@@ -121,8 +121,8 @@ def apply_timestamp(
     tmp = ImageDraw.Draw(thumb)
     bb = tmp.textbbox((0, 0), label, font=font)
     tw, th = bb[2] - bb[0], bb[3] - bb[1]
-    line_h, descent = _line_metrics(font)
-    box_w, box_h = tw + 4, line_h + 2
+    pad_x, pad_y = 2, 2
+    box_w, box_h = tw + pad_x * 2, th + pad_y * 2
     margin = 5
     x0 = thumb.width - box_w - margin
     y0 = thumb.height - box_h - margin
@@ -130,9 +130,10 @@ def apply_timestamp(
     box = Image.new("RGBA", (box_w, box_h), parse_color(bg))
     thumb.alpha_composite(box, (max(x0, 0), max(y0, 0)))
     draw = ImageDraw.Draw(thumb)
-    # baseline placement: account for textbbox top offset (ascender clip trap)
+    # center the glyph bbox within the box; subtract bb offsets so the drawn
+    # ink lands exactly pad_x/pad_y from the box's top-left corner
     draw.text(
-        (x0 + 2, y0 + 1 - bb[1]),
+        (x0 + pad_x - bb[0], y0 + pad_y - bb[1]),
         label,
         font=font,
         fill=parse_color(fg),

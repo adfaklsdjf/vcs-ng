@@ -84,10 +84,35 @@ def test_apply_timestamp_changes_pixels():
 def test_apply_timestamp_alpha_bg_translucent():
     thumb = Image.new("RGBA", (200, 120), (200, 50, 50, 255))
     font = load_font("DejaVuSans", 14)
-    apply_timestamp(thumb, "00:20.00", font, "white", "#00000080")
+    apply_timestamp(thumb, "00:20.00", font, "#00000080", "#00000080")
     # sample a pixel in the box area away from glyphs: underlying red still bleeds
     px = thumb.getpixel((198, 118))
     assert px[0] > 0  # some red channel survives the translucent black box
+
+
+def test_apply_timestamp_text_vertically_centered():
+    # Regression: text must sit centered in the box (equal padding top/bottom),
+    # not jammed against the top edge as it was before.
+    thumb = Image.new("RGBA", (300, 200), (0, 0, 0, 255))
+    font = load_font("DejaVuSans", 24)
+    # green box so it's distinguishable from both the black bg and white ink
+    apply_timestamp(thumb, "00:40.00", font, "white", "#00ff00")
+    px = thumb.load()
+
+    def is_box(p):
+        return p[1] > 100 and p[0] < 100  # greenish
+
+    def is_ink(p):
+        return p[0] > 200 and p[1] > 200 and p[2] > 200  # white
+
+    cols = range(180, 300)
+    box_rows = [y for y in range(200) if any(is_box(px[x, y]) for x in cols)]
+    ink_rows = [y for y in range(200) if any(is_ink(px[x, y]) for x in cols)]
+    assert box_rows and ink_rows
+    pad_top = min(ink_rows) - min(box_rows)
+    pad_bottom = max(box_rows) - max(ink_rows)
+    # symmetric within a pixel or two (glyph metrics aren't perfectly symmetric)
+    assert abs(pad_top - pad_bottom) <= 2, (pad_top, pad_bottom)
 
 
 # --- text_block / heading_block ------------------------------------------
@@ -208,3 +233,16 @@ def test_build_sheet_anonymous_vs_named_height():
     anon = build_sheet(_info(), frames, Settings(columns=3, height=90, anonymous=True), Fraction(16, 9))
     # named footer has 2 lines, anonymous 1 -> different height
     assert named.height != anon.height
+
+
+def test_build_sheet_credit_toggle():
+    frames = _frames(5)
+    base = dict(columns=3, height=90)
+    # anonymous + no credit -> no footer at all; strictly shorter than with credit
+    anon_credit = build_sheet(_info(), frames, Settings(**base, anonymous=True, credit=True), Fraction(16, 9))
+    anon_nocredit = build_sheet(_info(), frames, Settings(**base, anonymous=True, credit=False), Fraction(16, 9))
+    assert anon_nocredit.height < anon_credit.height
+    # named + no credit -> single footer line, shorter than the two-line credited footer
+    named_credit = build_sheet(_info(), frames, Settings(**base, anonymous=False, credit=True), Fraction(16, 9))
+    named_nocredit = build_sheet(_info(), frames, Settings(**base, anonymous=False, credit=False), Fraction(16, 9))
+    assert named_nocredit.height < named_credit.height

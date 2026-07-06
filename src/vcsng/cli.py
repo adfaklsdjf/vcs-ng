@@ -63,6 +63,13 @@ def _build_parser() -> argparse.ArgumentParser:
         p.add_argument(flag, dest=key, type=int, default=argparse.SUPPRESS)
 
     p.add_argument("--anonymous", action="store_true", default=argparse.SUPPRESS)
+    p.add_argument(
+        "--no-credit",
+        dest="credit",
+        action="store_false",
+        default=argparse.SUPPRESS,
+        help="omit the 'Created with vcs-ng <version>' footer line",
+    )
     p.add_argument("--username", type=str, default=argparse.SUPPRESS)
     p.add_argument("--signature", type=str, default=argparse.SUPPRESS)
 

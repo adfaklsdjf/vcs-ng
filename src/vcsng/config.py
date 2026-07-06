@@ -70,6 +70,7 @@ class Settings:
     overwrite: bool = False
     # general
     anonymous: bool = False
+    credit: bool = True  # show the "Created with vcs-ng <version>" line
     signature: str = "Preview created by"
     username: str | None = None
     workers: int | None = None
@@ -131,6 +132,7 @@ def _section_schema() -> dict[str, dict]:
         },
         "general": {
             "anonymous": _typed("anonymous", bool),
+            "credit": _typed("credit", bool),
             "signature": _typed("signature", str),
             "username": _typed("username", str),
             "workers": _typed("workers", int),
