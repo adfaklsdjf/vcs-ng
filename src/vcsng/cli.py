@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 import sys
 import time
@@ -133,6 +134,9 @@ def main(argv: list[str] | None = None) -> int:
 
     level = logging.DEBUG if args.verbose else logging.WARNING if args.quiet else logging.INFO
     logging.basicConfig(level=level, format="%(message)s", stream=sys.stderr)
+    # Pillow (and other libraries) emit noisy DEBUG records like "STREAM b'IDAT'";
+    # keep third-party loggers quiet even when our own logger is at DEBUG.
+    logging.getLogger("PIL").setLevel(logging.WARNING)
 
     try:
         overrides = _cli_overrides(args)
@@ -168,6 +172,34 @@ def main(argv: list[str] | None = None) -> int:
     return worst
 
 
+def _log_parameters(file_path: Path, s, info, stamps) -> None:
+    """Verbose dump of the effective settings used for this file."""
+    from .values import Percent
+
+    if s.mode == "interval":
+        capture_desc = f"interval {s.interval:g}s"
+    elif s.mode == "manual":
+        capture_desc = f"manual ({len(s.manual_stamps)} stamps)"
+    else:
+        capture_desc = f"numcaps {s.numcaps}"
+
+    height = f"{s.height.value:g}%" if isinstance(s.height, Percent) else f"{s.height}px"
+
+    log.debug("processing %s", file_path)
+    log.debug("  source: %dx%d, %.1fs, %s / %s", info.width, info.height,
+              info.duration, info.vcodec, info.acodec or "no audio")
+    log.debug("  capture: %s -> %d thumbnails, %d columns",
+              capture_desc, len(stamps), s.columns)
+    log.debug("  thumbnail height: %s (aspect %s)", height, s.aspect)
+    log.debug("  format: %s (quality %d)", s.format, s.quality)
+    log.debug("  shadows: %s, timestamps: %s", s.shadows, s.timestamps)
+    log.debug("  fonts: heading=%s tstamps=%s sign=%s title=%s",
+              s.font_heading, s.font_tstamps, s.font_sign, s.font_title)
+    log.debug("  colors: bg_contact=%s bg_heading=%s fg_heading=%s "
+              "bg_tstamps=%s fg_tstamps=%s",
+              s.bg_contact, s.bg_heading, s.fg_heading, s.bg_tstamps, s.fg_tstamps)
+
+
 def _process_one(file_path: Path, s) -> int:
     from .aspect import resolve_aspect
     from .capture import capture_frames
@@ -175,11 +207,21 @@ def _process_one(file_path: Path, s) -> int:
     from .probe import probe
     from .sheet import build_sheet
     from .timestamps import compute_stamps
+    from .values import pretty_stamp
 
     start = time.monotonic()
     info = probe(file_path)
     stamps = compute_stamps(info.duration, s)
-    frames = capture_frames(file_path, stamps, workers=s.workers)
+    _log_parameters(file_path, s, info, stamps)
+
+    total = len(stamps)
+    log.info("%s: capturing %d thumbnails", file_path.name, total)
+    counter = itertools.count(1)
+
+    def on_capture(ts: float) -> None:
+        log.info("  [%d/%d] capturing %s", next(counter), total, pretty_stamp(ts))
+
+    frames = capture_frames(file_path, stamps, workers=s.workers, on_capture=on_capture)
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
     img = build_sheet(info, frames, s, aspect)
     out_path = resolve_output_path(file_path, s)

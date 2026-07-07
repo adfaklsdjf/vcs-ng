@@ -32,3 +32,12 @@ def test_capture_frames_near_eof_does_not_raise(synthetic_video):
     ts, img = results[0]
     assert ts == 29.96
     assert img is None or isinstance(img, Image.Image)
+
+
+def test_capture_frames_on_capture_callback_fires_per_stamp(synthetic_video):
+    stamps = [5.0, 10.0, 15.0]
+    seen: list[float] = []
+    capture_frames(synthetic_video, stamps, on_capture=seen.append)
+    # one callback per stamp, exactly the stamps we asked for (order may vary
+    # across parallel workers, so compare as sets)
+    assert sorted(seen) == stamps

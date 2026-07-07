@@ -13,6 +13,26 @@ def write_toml(path: Path, text: str) -> Path:
     return path
 
 
+def test_config_load_logs_loaded_path(tmp_path, caplog):
+    config = write_toml(tmp_path / "config.toml", "[layout]\ncolumns = 3\n")
+    with caplog.at_level("DEBUG", logger="vcsng"):
+        build_settings({}, config_path=config)
+    assert any("loaded" in r.message and "config.toml" in r.message for r in caplog.records)
+
+
+def test_config_load_logs_when_missing(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty-xdg"))
+    with caplog.at_level("DEBUG", logger="vcsng"):
+        build_settings({})  # no config_path -> searches default, finds nothing
+    assert any("no config file found" in r.message for r in caplog.records)
+
+
+def test_config_load_logs_when_skipped(caplog):
+    with caplog.at_level("DEBUG", logger="vcsng"):
+        build_settings({}, no_config=True)
+    assert any("skipped" in r.message for r in caplog.records)
+
+
 def test_precedence_defaults_only():
     s = build_settings({}, no_config=True)
     assert s == Settings()

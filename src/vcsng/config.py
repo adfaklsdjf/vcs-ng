@@ -232,14 +232,21 @@ def build_settings(
         _VALID_FIELDS = {f.name for f in fields(Settings)}
 
     layers: list[dict] = []
-    if not no_config:
+    if no_config:
+        log.debug("config: skipped (--no-config)")
+    else:
         path = config_path or default_config_path()
         if path.is_file():
             layers.append(load_config_file(path))
+            log.debug("config: loaded %s", path)
         elif config_path is not None:
             raise UsageError(f"config file not found: {config_path}")
+        else:
+            log.debug("config: no config file found at %s (using defaults)", path)
     for name in profiles:
-        layers.append(load_config_file(profile_path(name)))
+        prof_path = profile_path(name)
+        layers.append(load_config_file(prof_path))
+        log.debug("config: loaded profile %r from %s", name, prof_path)
 
     cli = dict(cli_overrides)
     _normalize_layer(cli)
