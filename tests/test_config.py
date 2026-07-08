@@ -144,6 +144,24 @@ def test_suffix_from_config(tmp_path):
     assert s.suffix == "-ss"
 
 
+def test_output_template_from_config(tmp_path):
+    config = write_toml(tmp_path / "config.toml", '[output]\noutput = "{stem}-thumb.{ext}"\n')
+    s = build_settings({}, config_path=config)
+    assert s.output == "{stem}-thumb.{ext}"
+
+
+def test_overwrite_from_config(tmp_path):
+    config = write_toml(tmp_path / "config.toml", "[output]\noverwrite = true\n")
+    s = build_settings({}, config_path=config)
+    assert s.overwrite is True
+
+
+def test_workers_from_config(tmp_path):
+    config = write_toml(tmp_path / "config.toml", "[general]\nworkers = 3\n")
+    s = build_settings({}, config_path=config)
+    assert s.workers == 3
+
+
 def test_unknown_key_warning(tmp_path, caplog):
     config = write_toml(tmp_path / "config.toml", "[layout]\nnonexistent_key = 5\n")
     with caplog.at_level("WARNING"):

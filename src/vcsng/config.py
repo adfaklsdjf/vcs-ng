@@ -130,7 +130,9 @@ def _section_schema() -> dict[str, dict]:
         "output": {
             "format": _typed("format", str),
             "quality": _typed("quality", int),
+            "output": _typed("output", str),
             "suffix": _typed("suffix", str),
+            "overwrite": _typed("overwrite", bool),
         },
         "general": {
             "anonymous": _typed("anonymous", bool),
