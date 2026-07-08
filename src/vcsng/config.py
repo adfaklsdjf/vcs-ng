@@ -67,6 +67,7 @@ class Settings:
     format: str = "png"  # png | jpeg
     quality: int = 92
     output: str | None = None  # -o template: {stem} {name} {dir} {ext}
+    suffix: str = ""  # appended to {stem} before the extension, e.g. "-ss"
     overwrite: bool = False
     # general
     anonymous: bool = False
@@ -129,6 +130,7 @@ def _section_schema() -> dict[str, dict]:
         "output": {
             "format": _typed("format", str),
             "quality": _typed("quality", int),
+            "suffix": _typed("suffix", str),
         },
         "general": {
             "anonymous": _typed("anonymous", bool),

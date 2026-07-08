@@ -76,6 +76,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("-o", "--output", type=str, default=argparse.SUPPRESS)
     p.add_argument(
+        "--suffix",
+        type=str,
+        default=argparse.SUPPRESS,
+        help="appended to the filename before the extension, e.g. -ss",
+    )
+    p.add_argument(
         "-f", "--format", choices=["png", "jpeg", "jpg"], default=argparse.SUPPRESS
     )
     p.add_argument("-q", "--quality", type=int, default=argparse.SUPPRESS)

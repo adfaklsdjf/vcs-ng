@@ -17,10 +17,11 @@ _VALID_TOKENS = {"stem", "name", "dir", "ext"}
 def resolve_output_path(input_path: Path, s: Settings) -> Path:
     template = s.output or "{stem}.{ext}"
     ext = "jpg" if s.format == "jpeg" else s.format
+    stem = input_path.stem + s.suffix
 
     tokens = {
-        "stem": input_path.stem,
-        "name": input_path.name,
+        "stem": stem,
+        "name": stem + input_path.suffix,
         "dir": str(input_path.parent),
         "ext": ext,
     }

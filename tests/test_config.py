@@ -138,6 +138,12 @@ def test_format_invalid_raises(tmp_path):
         build_settings({}, config_path=config)
 
 
+def test_suffix_from_config(tmp_path):
+    config = write_toml(tmp_path / "config.toml", '[output]\nsuffix = "-ss"\n')
+    s = build_settings({}, config_path=config)
+    assert s.suffix == "-ss"
+
+
 def test_unknown_key_warning(tmp_path, caplog):
     config = write_toml(tmp_path / "config.toml", "[layout]\nnonexistent_key = 5\n")
     with caplog.at_level("WARNING"):

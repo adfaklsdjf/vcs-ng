@@ -35,6 +35,18 @@ def test_resolve_output_path_name_token(tmp_path):
     assert result.name == "video.mp4.contact.png"
 
 
+def test_resolve_output_path_suffix_default_template(tmp_path):
+    s = _settings(format="jpeg", suffix="-ss")
+    result = resolve_output_path(Path("movie.mkv"), s)
+    assert result.name == "movie-ss.jpg"
+
+
+def test_resolve_output_path_suffix_with_name_token(tmp_path):
+    s = _settings(format="png", suffix="-ss", output="{name}.contact.{ext}")
+    result = resolve_output_path(Path("video.mp4"), s)
+    assert result.name == "video-ss.mp4.contact.png"
+
+
 def test_resolve_output_path_unknown_token_raises():
     s = _settings(output="{bogus}.{ext}")
     with pytest.raises(UsageError):
