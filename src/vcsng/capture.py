@@ -25,6 +25,7 @@ def _run_ffmpeg(path: Path, ts: float) -> Image.Image | None:
         proc = subprocess.run(
             [
                 "ffmpeg",
+                "-nostdin",
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -43,6 +44,7 @@ def _run_ffmpeg(path: Path, ts: float) -> Image.Image | None:
                 "png",
                 "-",
             ],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=60,
         )
