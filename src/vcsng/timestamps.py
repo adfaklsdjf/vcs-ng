@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .config import Settings
-from .errors import UsageError
+from .errors import SkippedInput, UsageError
 from .values import Percent
 
 
@@ -25,14 +25,18 @@ def compute_stamps(duration: float, s: Settings) -> list[float]:
     stamps: list[float] = []
 
     if s.mode == "interval":
-        if s.interval >= duration:
-            raise UsageError(f"interval {s.interval} >= duration {duration}")
         k = 1
         stamp = start + k * s.interval
         while stamp <= limit:
             stamps.append(stamp)
             k += 1
             stamp = start + k * s.interval
+        if not stamps:
+            if s.skip_short:
+                raise SkippedInput(
+                    f"interval {s.interval:g}s exceeds capture window (duration {duration:g}s)"
+                )
+            stamps.append(start + (end - start) / 2)
     elif s.mode == "numcaps":
         if s.numcaps < 1:
             raise UsageError(f"numcaps must be >= 1: {s.numcaps}")

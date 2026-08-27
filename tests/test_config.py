@@ -156,6 +156,13 @@ def test_overwrite_from_config(tmp_path):
     assert s.overwrite is True
 
 
+def test_skip_short_from_config(tmp_path):
+    assert build_settings({}, no_config=True).skip_short is False
+    config = write_toml(tmp_path / "config.toml", "[capture]\nskip_short = true\n")
+    s = build_settings({}, config_path=config)
+    assert s.skip_short is True
+
+
 def test_workers_from_config(tmp_path):
     config = write_toml(tmp_path / "config.toml", "[general]\nworkers = 3\n")
     s = build_settings({}, config_path=config)

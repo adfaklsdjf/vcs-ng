@@ -75,6 +75,8 @@ interval = "20s"        # -i/--interval (accepts timespecs like "1m30s")
 from = "10s"             # --from
 to = "5m"                 # --to
 end_offset = "5%"         # --end-offset (percent or seconds; skip this much off the end)
+skip_short = false         # --skip-short (skip videos too short for the interval;
+                           # default falls back to a single centered capture)
 
 [layout]
 columns = 4              # -c/--columns

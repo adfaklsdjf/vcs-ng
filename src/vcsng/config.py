@@ -37,6 +37,7 @@ class Settings:
     from_time: float = 0.0
     to_time: float | None = None
     end_offset: float | Percent = Percent(5.0)
+    skip_short: bool = False  # skip videos too short for the interval (default: 1 centered cap)
     # layout
     columns: int = 4
     height: int | Percent = Percent(100.0)
@@ -117,6 +118,7 @@ def _section_schema() -> dict[str, dict]:
             "from": parse_timespec,
             "to": parse_timespec,
             "end_offset": parse_percent_or_seconds,
+            "skip_short": _typed("skip_short", bool),
         },
         "layout": {
             "columns": _typed("columns", int),

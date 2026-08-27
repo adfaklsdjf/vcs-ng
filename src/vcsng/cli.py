@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from . import __version__
-from .errors import UsageError, VcsngError
+from .errors import SkippedInput, UsageError, VcsngError
 from .values import parse_aspect, parse_height, parse_percent_or_seconds, parse_timespec
 
 log = logging.getLogger("vcsng")
@@ -36,6 +36,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-S", "--stamp", action="append", dest="stamp", default=argparse.SUPPRESS,
         metavar="TIME",
+    )
+
+    p.add_argument(
+        "--skip-short",
+        dest="skip_short",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="skip videos too short for the capture interval "
+        "(default: fall back to a single centered capture)",
     )
 
     p.add_argument("--from", dest="from_time", type=parse_timespec, default=argparse.SUPPRESS)
@@ -172,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
     for file_path in args.files:
         try:
             worst = max(worst, _process_one(file_path, settings))
+        except SkippedInput as e:
+            log.info("%s: skipped: %s", file_path, e)
         except VcsngError as e:
             log.error("%s: %s", file_path, e)
             worst = max(worst, e.exit_code)

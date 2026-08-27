@@ -13,6 +13,12 @@ class InputError(VcsngError):
     exit_code = 66  # EX_NOINPUT
 
 
+class SkippedInput(VcsngError):
+    """Input intentionally skipped (not an error), e.g. --skip-short."""
+
+    exit_code = 0
+
+
 class ProbeError(InputError):
     pass
 

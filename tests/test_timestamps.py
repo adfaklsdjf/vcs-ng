@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from vcsng.config import Settings
-from vcsng.errors import UsageError
+from vcsng.errors import SkippedInput, UsageError
 from vcsng.timestamps import compute_stamps
 from vcsng.values import Percent
 
@@ -19,10 +19,23 @@ def test_interval_default_end_offset():
     assert stamps == [round(20.0 * k, 3) for k in range(1, 15)]
 
 
-def test_interval_too_large_raises():
+def test_interval_too_large_falls_back_to_centered_single():
     s = Settings(mode="interval", interval=400.0)
-    with pytest.raises(UsageError):
+    stamps = compute_stamps(DURATION, s)
+    assert stamps == [round(DURATION / 2, 3)]
+
+
+def test_interval_too_large_with_skip_short_raises_skipped():
+    s = Settings(mode="interval", interval=400.0, skip_short=True)
+    with pytest.raises(SkippedInput):
         compute_stamps(DURATION, s)
+
+
+def test_interval_exceeding_window_but_not_duration_falls_back():
+    # interval fits within the duration but not within the end-offset window
+    s = Settings(mode="interval", interval=DURATION * 0.97)
+    stamps = compute_stamps(DURATION, s)
+    assert stamps == [round(DURATION / 2, 3)]
 
 
 def test_numcaps_default_count_and_spacing():
