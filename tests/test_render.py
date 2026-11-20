@@ -246,3 +246,33 @@ def test_build_sheet_credit_toggle():
     named_credit = build_sheet(_info(), frames, Settings(**base, anonymous=False, credit=True), Fraction(16, 9))
     named_nocredit = build_sheet(_info(), frames, Settings(**base, anonymous=False, credit=False), Fraction(16, 9))
     assert named_nocredit.height < named_credit.height
+
+
+# --- font resolution -----------------------------------------------------
+
+def test_dejavu_name_uses_bundled_without_search(monkeypatch):
+    from vcsng import fonts
+
+    fonts._resolve.cache_clear()
+    monkeypatch.setattr(fonts, "_find_family", lambda spec: pytest.fail("searched"))
+    assert fonts._resolve("DejaVuSans") == _bundled_path()
+
+
+def test_missing_dejavu_path_falls_back_quietly(caplog):
+    from vcsng import fonts
+
+    fonts._resolve.cache_clear()
+    with caplog.at_level("DEBUG", logger="vcsng"):
+        assert fonts._resolve("/nonexistent/DejaVuSans.ttf") == _bundled_path()
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_missing_other_font_warns_once(caplog, monkeypatch):
+    from vcsng import fonts
+
+    fonts._resolve.cache_clear()
+    monkeypatch.setattr(fonts, "_find_family", lambda spec: None)
+    with caplog.at_level("WARNING", logger="vcsng"):
+        fonts._resolve("NoSuchFont")
+        fonts._resolve("NoSuchFont")
+    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1

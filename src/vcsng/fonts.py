@@ -42,14 +42,28 @@ def _find_family(spec: str) -> str | None:
     return None
 
 
+_BUNDLED_NAMES = {"", "dejavusans", "dejavu sans", "dejavu-sans"}
+
+
+@lru_cache(maxsize=None)
 def _resolve(spec: str) -> str:
-    if spec and Path(spec).is_file():
-        return spec
-    found = _find_family(spec) if spec else None
+    """Map a font spec (path or family name) to a font file path.
+
+    DejaVu Sans is bundled with the package, so asking for it -- by name, or by a
+    path to a DejaVuSans.ttf that doesn't exist on this machine (e.g. a config
+    shared between macOS and Linux) -- uses the bundled copy without searching
+    the system font directories. Cached so each spec is resolved/logged once.
+    """
+    if spec and Path(spec).expanduser().is_file():
+        return str(Path(spec).expanduser())
+    if Path(spec).stem.lower() in _BUNDLED_NAMES:
+        if spec.lower() not in _BUNDLED_NAMES:
+            log.debug("font %r not found; using bundled DejaVuSans", spec)
+        return _bundled_path()
+    found = _find_family(spec)
     if found:
         return found
-    if spec and spec.lower() not in ("dejavusans", ""):
-        log.warning("font %r not found; falling back to bundled DejaVuSans", spec)
+    log.warning("font %r not found; falling back to bundled DejaVuSans", spec)
     return _bundled_path()
 
 
