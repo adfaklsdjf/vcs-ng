@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -14,7 +15,9 @@ _TOKEN_RE = re.compile(r"\{(\w+)\}")
 _VALID_TOKENS = {"stem", "name", "dir", "ext"}
 
 
-def resolve_output_path(input_path: Path, s: Settings) -> Path:
+def resolve_output_path(input_path: Path, s: Settings, base_dir: Path | None = None) -> Path:
+    """Expand the output template. Relative results are resolved against
+    base_dir (directory scans pass the video's own directory) or else the CWD."""
     template = s.output or "{stem}.{ext}"
     ext = "jpg" if s.format == "jpeg" else s.format
     stem = input_path.stem + s.suffix
@@ -33,7 +36,7 @@ def resolve_output_path(input_path: Path, s: Settings) -> Path:
 
     formatted = _TOKEN_RE.sub(lambda m: tokens[m.group(1)], template)
     result = Path(formatted)
-    return result if result.is_absolute() else Path.cwd() / result
+    return result if result.is_absolute() else (base_dir or Path.cwd()) / result
 
 
 def _safe_path(path: Path) -> Path:
@@ -50,7 +53,10 @@ def _safe_path(path: Path) -> Path:
 
 
 def save_sheet(img: Image.Image, path: Path, s: Settings) -> Path:
+    """Write via a hidden temp file + rename, so an interrupted run never leaves
+    a half-written sheet in place of a good one."""
     target = path if s.overwrite else _safe_path(path)
+    tmp = target.with_name(f".{target.name}.tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         if s.format == "jpeg":
@@ -66,9 +72,11 @@ def save_sheet(img: Image.Image, path: Path, s: Settings) -> Path:
                 img_to_save = flattened
             else:
                 img_to_save = img
-            img_to_save.save(target, quality=s.quality)
+            img_to_save.save(tmp, format="JPEG", quality=s.quality)
         else:
-            img.save(target)
+            img.save(tmp, format="PNG")
+        os.replace(tmp, target)
     except OSError as e:
+        tmp.unlink(missing_ok=True)
         raise OutputError(f"failed to write {target}: {e}") from None
     return target
