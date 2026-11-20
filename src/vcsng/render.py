@@ -115,8 +115,8 @@ def apply_timestamp(
     font: ImageFont.FreeTypeFont,
     fg: str,
     bg: str,
-    pad_x: int = 6,
-    pad_y: int = 6,
+    pad_x: int = 10,
+    pad_y: int = 10,
 ) -> None:
     """Draw text in a bg box (pad_x/pad_y px of padding around the glyphs)
     anchored 5px from the bottom-right; mutates thumb."""
