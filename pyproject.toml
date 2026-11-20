@@ -1,6 +1,6 @@
 [project]
 name = "vcs-ng"
-version = "0.1.0"
+version = "1.0.0"
 description = "Video contact sheet generator — a modern rewrite of Video Contact Sheet *NIX"
 readme = "README.md"
 requires-python = ">=3.11"
