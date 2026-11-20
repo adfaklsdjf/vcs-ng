@@ -7,6 +7,8 @@ import itertools
 import logging
 import sys
 import time
+from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from . import __version__
@@ -28,7 +30,24 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="vcsng",
         description="Generate a video contact sheet (thumbnail grid) from a video file.",
     )
-    p.add_argument("files", metavar="FILE", nargs="+", type=Path)
+    p.add_argument(
+        "files", metavar="PATH", nargs="*", type=Path,
+        help="video files and/or directories (directories are scanned recursively)",
+    )
+    p.add_argument(
+        "-r", "--recursive", action="store_true", default=False,
+        help="scan directories recursively for videos (current directory if no PATH given); "
+        "sheets go next to each video, skipping ones that already exist and are at "
+        "least --min-width wide",
+    )
+    p.add_argument(
+        "--extensions", type=str, default=argparse.SUPPRESS,
+        help="comma-separated video extensions to look for when scanning directories",
+    )
+    p.add_argument(
+        "--min-width", dest="min_width", type=int, default=argparse.SUPPRESS,
+        help="when scanning, regenerate existing sheets narrower than this (default 2000)",
+    )
 
     caps = p.add_mutually_exclusive_group()
     caps.add_argument("-n", "--numcaps", type=int, default=argparse.SUPPRESS)
@@ -113,7 +132,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _cli_overrides(args: argparse.Namespace) -> dict:
     overrides = vars(args).copy()
-    for key in ("files", "profile", "config", "no_config", "verbose", "quiet"):
+    for key in ("files", "recursive", "profile", "config", "no_config", "verbose", "quiet"):
         overrides.pop(key, None)
 
     stamps = overrides.pop("stamp", None)
@@ -122,6 +141,11 @@ def _cli_overrides(args: argparse.Namespace) -> dict:
         overrides["manual_stamps"] = manual
         if "numcaps" not in overrides and "interval" not in overrides:
             overrides["mode"] = "manual"
+
+    if "extensions" in overrides:
+        from .config import parse_extensions
+
+        overrides["extensions"] = parse_extensions(overrides["extensions"])
 
     if "format" in overrides and overrides["format"] == "jpg":
         overrides["format"] = "jpeg"
@@ -153,17 +177,15 @@ def main(argv: list[str] | None = None) -> int:
     # keep third-party loggers quiet even when our own logger is at DEBUG.
     logging.getLogger("PIL").setLevel(logging.WARNING)
 
+    paths = list(args.files)
+    if not paths:
+        if not args.recursive:
+            parser.error("no input files (use -r to scan the current directory)")
+        paths = [Path(".")]
+
     try:
         overrides = _cli_overrides(args)
         _infer_format(overrides)
-
-        if len(args.files) > 1:
-            output_tpl = overrides.get("output")
-            if output_tpl and "{stem}" not in output_tpl and "{name}" not in output_tpl:
-                raise UsageError(
-                    "output template would overwrite itself: needs {stem} or {name} "
-                    "when processing multiple files"
-                )
 
         from .config import build_settings
 
@@ -173,20 +195,73 @@ def main(argv: list[str] | None = None) -> int:
             profiles=tuple(args.profile),
             no_config=args.no_config,
         )
+        jobs = _collect_jobs(paths, settings, recursive=args.recursive)
+        if len(jobs) > 1 or any(scanned for _, scanned in jobs):
+            output_tpl = settings.output
+            if output_tpl and "{stem}" not in output_tpl and "{name}" not in output_tpl:
+                raise UsageError(
+                    "output template would overwrite itself: needs {stem} or {name} "
+                    "when processing multiple files"
+                )
     except UsageError as e:
         parser.error(str(e))
         return 64  # pragma: no cover — parser.error exits
 
     worst = 0
-    for file_path in args.files:
+    tally: Counter[str] = Counter()
+    failed: list[tuple[Path, str]] = []
+    for file_path, scanned in jobs:
         try:
-            worst = max(worst, _process_one(file_path, settings))
+            if scanned:
+                tally[_process_scanned(file_path, settings)] += 1
+            else:
+                worst = max(worst, _process_one(file_path, settings))
+                tally["generated"] += 1
         except SkippedInput as e:
             log.info("%s: skipped: %s", file_path, e)
+            tally["skipped"] += 1
         except VcsngError as e:
             log.error("%s: %s", file_path, e)
+            failed.append((file_path, str(e)))
             worst = max(worst, e.exit_code)
+
+    if len(jobs) > 1 or any(scanned for _, scanned in jobs):
+        _log_summary(tally, failed)
     return worst
+
+
+def _collect_jobs(
+    paths: list[Path], s, *, recursive: bool
+) -> list[tuple[Path, bool]]:
+    """Expand directory arguments into (video, scanned=True) jobs; files pass through."""
+    from .scan import iter_videos
+
+    jobs: list[tuple[Path, bool]] = []
+    for path in paths:
+        if not path.is_dir():
+            jobs.append((path, False))
+            continue
+        if not recursive:
+            log.info("%s is a directory; scanning recursively", path)
+        found = list(iter_videos(path, s.extensions))
+        log.info("%s: found %d video%s", path, len(found), "" if len(found) == 1 else "s")
+        jobs.extend((v, True) for v in found)
+    return jobs
+
+
+def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
+    parts = [f"{tally[k]} {label}" for k, label in (
+        ("generated", "generated"),
+        ("regenerated", "regenerated"),
+        ("up_to_date", "up to date"),
+        ("skipped", "skipped"),
+    ) if tally[k]]
+    parts.append(f"{len(failed)} failed")
+    log.info("done: %s", ", ".join(parts))
+    if failed:
+        log.error("failed (%d):", len(failed))
+        for path, msg in failed:
+            log.error("  %s: %s", path, msg)
 
 
 def _log_parameters(file_path: Path, s, info, stamps) -> None:
@@ -217,16 +292,15 @@ def _log_parameters(file_path: Path, s, info, stamps) -> None:
               s.bg_contact, s.bg_heading, s.fg_heading, s.bg_tstamps, s.fg_tstamps)
 
 
-def _process_one(file_path: Path, s) -> int:
+def _render(file_path: Path, s):
+    """Probe, capture, and compose the sheet. Returns (image, capture count)."""
     from .aspect import resolve_aspect
     from .capture import capture_frames
-    from .output import resolve_output_path, save_sheet
     from .probe import probe
     from .sheet import build_sheet
     from .timestamps import compute_stamps
     from .values import pretty_stamp
 
-    start = time.monotonic()
     info = probe(file_path)
     stamps = compute_stamps(info.duration, s)
     _log_parameters(file_path, s, info, stamps)
@@ -240,15 +314,60 @@ def _process_one(file_path: Path, s) -> int:
 
     frames = capture_frames(file_path, stamps, workers=s.workers, on_capture=on_capture)
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
-    img = build_sheet(info, frames, s, aspect)
-    out_path = resolve_output_path(file_path, s)
+    return build_sheet(info, frames, s, aspect), total
+
+
+def _process_one(file_path: Path, s, out_path: Path | None = None, before_save=None) -> int:
+    from .output import resolve_output_path, save_sheet
+
+    start = time.monotonic()
+    img, n_caps = _render(file_path, s)
+    out_path = out_path or resolve_output_path(file_path, s)
+    if before_save is not None:
+        before_save()
     written = save_sheet(img, out_path, s)
     elapsed = time.monotonic() - start
     log.info(
         "wrote %s (%dx%d, %d captures, %.1fs)",
-        written, img.width, img.height, len(stamps), elapsed,
+        written, img.width, img.height, n_caps, elapsed,
     )
     return 0
+
+
+def _process_scanned(file_path: Path, s) -> str:
+    """Directory-scan mode: sheet goes next to the video and is only (re)made when
+    missing, narrower than s.min_width, or not a valid image. Returns a tally key."""
+    from .errors import OutputError
+    from .output import resolve_output_path
+    from .scan import Existing, check_existing, set_aside
+
+    out = resolve_output_path(file_path, s, base_dir=file_path.parent)
+    status, width = check_existing(out, s.format, s.min_width)
+
+    if status is Existing.OK and not s.overwrite:
+        log.debug("%s: up to date (%s, %dpx wide)", file_path, out.name, width)
+        return "up_to_date"
+    if status is Existing.UNDERSIZED:
+        log.info("%s: existing %s is %dpx wide (< %d); regenerating",
+                 file_path, out.name, width, s.min_width)
+    elif status is Existing.BAD:
+        log.warning("%s: existing %s is not a valid %s image; it will be set aside",
+                    file_path, out.name, s.format.upper())
+
+    def set_aside_bad() -> None:
+        try:
+            moved = set_aside(out)
+        except OSError as e:
+            raise OutputError(f"could not rename {out}: {e}") from None
+        log.warning("moved %s -> %s", out, moved.name)
+
+    _process_one(
+        file_path,
+        replace(s, overwrite=True),
+        out_path=out,
+        before_save=set_aside_bad if status is Existing.BAD else None,
+    )
+    return "generated" if status is Existing.MISSING else "regenerated"
 
 
 if __name__ == "__main__":

@@ -26,6 +26,23 @@ from .values import (
 
 log = logging.getLogger("vcsng")
 
+DEFAULT_EXTENSIONS: tuple[str, ...] = (
+    "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m4v", "mkv", "mov",
+    "mp4", "mpeg", "mpg", "mts", "ogv", "rm", "rmvb", "webm", "wmv",
+)
+
+
+def parse_extensions(value) -> tuple[str, ...]:
+    """Accept a list or comma-separated string; lowercase, strip leading dots."""
+    if isinstance(value, str):
+        value = value.split(",")
+    if not isinstance(value, (list, tuple)) or not all(isinstance(v, str) for v in value):
+        raise UsageError(f"extensions: expected a list of strings, got {value!r}")
+    exts = tuple(sorted({v.strip().lower().lstrip(".") for v in value if v.strip()}))
+    if not exts:
+        raise UsageError("extensions: list is empty")
+    return exts
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -76,6 +93,9 @@ class Settings:
     signature: str = "Preview created by"
     username: str | None = None
     workers: int | None = None
+    # directory scanning (-r / directory arguments)
+    extensions: tuple[str, ...] = DEFAULT_EXTENSIONS
+    min_width: int = 2000  # existing sheets narrower than this are regenerated
 
 
 _META_STYLE = {
@@ -135,6 +155,10 @@ def _section_schema() -> dict[str, dict]:
             "output": _typed("output", str),
             "suffix": _typed("suffix", str),
             "overwrite": _typed("overwrite", bool),
+        },
+        "scan": {
+            "extensions": parse_extensions,
+            "min_width": _typed("min_width", int),
         },
         "general": {
             "anonymous": _typed("anonymous", bool),

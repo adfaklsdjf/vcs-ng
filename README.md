@@ -46,7 +46,33 @@ vcsng video.mkv                      # 16 evenly spaced captures, 4 columns, PNG
 vcsng -i 20s -c 6 -H 330 video.mkv   # every 20s, 6 columns, 330px-tall thumbs
 vcsng --profile black -f jpeg *.mkv  # white-on-black theme, JPEG output
 vcsng --no-credit video.mkv          # omit the "Created with vcs-ng" footer line
+vcsng -r                             # every video under the current directory
+vcsng /media/tv                      # a directory argument is always scanned recursively
 ```
+
+### Scanning directories
+
+Given a directory (or `-r`, which defaults to the current directory), vcsng walks
+it recursively and makes a sheet **next to each video**: relative `-o` templates
+are resolved against the video's own directory rather than the CWD. It skips
+hidden files/directories, symlinks, `Sample`/`Samples` directories, and files
+with the word "sample" in their name. Videos are recognized by extension
+(`--extensions mkv,mp4,...` or `[scan] extensions`).
+
+For each video, whatever already exists at the output path decides what happens:
+
+| Existing output | Action |
+|---|---|
+| nothing | generate |
+| valid image of the configured format, ≥ `min_width` px wide | skip (up to date) |
+| valid image of the configured format, narrower than `min_width` | regenerate, overwrite |
+| anything else (truncated/corrupt, wrong format, not an image) | rename to `NAME.bad`, then generate |
+
+`--overwrite` regenerates everything (still renaming non-images rather than
+overwriting them). Failures are logged and the run continues; a summary and the
+list of failed files are printed at the end. Sheets are written to a hidden
+temporary file and renamed into place, so an interrupted run never leaves a
+half-written sheet.
 
 Configuration lives at `~/.config/vcsng/config.toml`; named presets at
 `~/.config/vcsng/profiles/NAME.toml` (built-ins: `black`, `white`, `compact`, `mosaic`).
@@ -113,6 +139,12 @@ quality = 92               # -q/--quality (JPEG only)
 output = "{stem}.{ext}"     # -o/--output template ({stem} {name} {dir} {ext})
 suffix = "-ss"               # --suffix, appended to {stem} before the extension
 overwrite = false             # --overwrite
+
+[scan]                    # used when scanning directories (-r or a directory argument)
+min_width = 2000           # --min-width; existing sheets narrower than this are regenerated
+# extensions = ["3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m4v", "mkv", "mov",
+#               "mp4", "mpeg", "mpg", "mts", "ogv", "rm", "rmvb", "webm", "wmv"]
+#                          # --extensions (comma-separated); default shown
 
 [general]
 anonymous = false         # --anonymous
