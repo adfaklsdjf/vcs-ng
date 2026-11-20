@@ -130,6 +130,8 @@ pts_heading = 14
 pts_tstamps = 14
 pts_sign = 10
 pts_title = 33
+tstamp_pad_x = 6          # --tstamp-pad-x; px between timestamp text and box edge
+tstamp_pad_y = 6          # --tstamp-pad-y
 # bg_all / fg_all / font_all set all bg_*, fg_*, or font_* keys at once
 # (each individual key above still overrides its shorthand)
 

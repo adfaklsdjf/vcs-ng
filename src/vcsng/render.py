@@ -115,13 +115,15 @@ def apply_timestamp(
     font: ImageFont.FreeTypeFont,
     fg: str,
     bg: str,
+    pad_x: int = 6,
+    pad_y: int = 6,
 ) -> None:
-    """Draw ` text ` in a bg box anchored 5px from the bottom-right; mutates thumb."""
-    label = f" {text} "
+    """Draw text in a bg box (pad_x/pad_y px of padding around the glyphs)
+    anchored 5px from the bottom-right; mutates thumb."""
+    label = text
     tmp = ImageDraw.Draw(thumb)
     bb = tmp.textbbox((0, 0), label, font=font)
     tw, th = bb[2] - bb[0], bb[3] - bb[1]
-    pad_x, pad_y = 2, 2
     box_w, box_h = tw + pad_x * 2, th + pad_y * 2
     margin = 5
     x0 = thumb.width - box_w - margin

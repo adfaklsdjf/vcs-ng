@@ -22,7 +22,9 @@ _STYLE_KEYS = (
     "bg_contact", "bg_tstamps", "fg_tstamps", "bg_all", "fg_all",
     "font_heading", "font_tstamps", "font_sign", "font_title", "font_all",
 )
-_STYLE_PTS_KEYS = ("pts_heading", "pts_tstamps", "pts_sign", "pts_title")
+_STYLE_PTS_KEYS = (
+    "pts_heading", "pts_tstamps", "pts_sign", "pts_title", "tstamp_pad_x", "tstamp_pad_y",
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:

@@ -110,7 +110,8 @@ def build_sheet(
             tile = frame.convert("RGBA").resize((thumb_w, thumb_h), Image.LANCZOS)
         if s.timestamps:
             apply_timestamp(
-                tile, pretty_stamp(stamp), ts_font, s.fg_tstamps, s.bg_tstamps
+                tile, pretty_stamp(stamp), ts_font, s.fg_tstamps, s.bg_tstamps,
+                s.tstamp_pad_x, s.tstamp_pad_y,
             )
         if s.shadows:
             tile = drop_shadow(tile)

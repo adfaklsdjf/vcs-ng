@@ -276,3 +276,23 @@ def test_missing_other_font_warns_once(caplog, monkeypatch):
         fonts._resolve("NoSuchFont")
         fonts._resolve("NoSuchFont")
     assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
+
+
+@pytest.mark.parametrize("pad_x,pad_y", [(6, 6), (0, 10)])
+def test_apply_timestamp_box_is_text_plus_padding(pad_x, pad_y):
+    font = load_font("DejaVuSans", 20)
+    thumb = Image.new("RGBA", (300, 200), (255, 255, 255, 255))
+    apply_timestamp(thumb, "01:23.45", font, "black", "black", pad_x, pad_y)
+    l, t, r, b = thumb.convert("L").point(lambda v: 255 - v).getbbox()
+    bb = font.getbbox("01:23.45")
+    assert (r - l, b - t) == (bb[2] - bb[0] + 2 * pad_x, bb[3] - bb[1] + 2 * pad_y)
+    assert (300 - r, 200 - b) == (5, 5)  # margin from bottom-right
+
+
+def test_tstamp_padding_from_config(tmp_path):
+    from vcsng.config import build_settings
+
+    cfg = tmp_path / "c.toml"
+    cfg.write_text("[style]\ntstamp_pad_x = 3\ntstamp_pad_y = 8\n")
+    s = build_settings({}, config_path=cfg)
+    assert (s.tstamp_pad_x, s.tstamp_pad_y) == (3, 8)

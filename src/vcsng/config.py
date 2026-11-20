@@ -81,6 +81,8 @@ class Settings:
     pts_tstamps: int = 14
     pts_sign: int = 10
     pts_title: int = 33
+    tstamp_pad_x: int = 6  # px between timestamp text and its bg box edge
+    tstamp_pad_y: int = 6
     # output
     format: str = "png"  # png | jpeg
     quality: int = 92
@@ -128,7 +130,8 @@ def _section_schema() -> dict[str, dict]:
         "bg_all", "fg_all", "font_all",
     ):
         style[f] = _typed(f, str)
-    for f in ("pts_heading", "pts_tstamps", "pts_sign", "pts_title"):
+    for f in ("pts_heading", "pts_tstamps", "pts_sign", "pts_title",
+              "tstamp_pad_x", "tstamp_pad_y"):
         style[f] = _typed(f, int)
     return {
         "capture": {
