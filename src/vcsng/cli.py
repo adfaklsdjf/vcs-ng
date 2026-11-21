@@ -212,37 +212,45 @@ def main(argv: list[str] | None = None) -> int:
             profiles=tuple(args.profile),
             no_config=args.no_config,
         )
-        jobs = _collect_jobs(paths, settings, recursive=args.recursive)
-        if len(jobs) > 1 or any(scanned for _, scanned in jobs):
+        from .plan import Action, build_plan, collect_inputs
+
+        inputs = collect_inputs(paths, settings, recursive=args.recursive)
+        batch = len(inputs) > 1 or any(i.scanned for i in inputs)
+        if batch:
             output_tpl = settings.output
             if output_tpl and "{stem}" not in output_tpl and "{name}" not in output_tpl:
                 raise UsageError(
                     "output template would overwrite itself: needs {stem} or {name} "
                     "when processing multiple files"
                 )
+        plan = build_plan(inputs, settings)
     except UsageError as e:
         parser.error(str(e))
         return 64  # pragma: no cover — parser.error exits
 
     worst = 0
-    tally: Counter[str] = Counter()
+    tally: Counter[str] = Counter(up_to_date=plan.up_to_date)
     failed: list[tuple[Path, str]] = []
-    for file_path, scanned in jobs:
+    for path, err in plan.failed:
+        log.error("%s: %s", path, err)
+        failed.append((path, str(err)))
+        worst = max(worst, err.exit_code)
+    if batch:
+        _log_plan(plan)
+
+    for job in plan.jobs:
         try:
-            if scanned:
-                tally[_process_scanned(file_path, settings)] += 1
-            else:
-                worst = max(worst, _process_one(file_path, settings))
-                tally["generated"] += 1
+            _run_job(job, settings)
+            tally["generated" if job.action is Action.NEW else "regenerated"] += 1
         except SkippedInput as e:
-            log.info("%s: skipped: %s", file_path, e)
+            log.info("%s: skipped: %s", job.video, e)
             tally["skipped"] += 1
         except VcsngError as e:
-            log.error("%s: %s", file_path, e)
-            failed.append((file_path, str(e)))
+            log.error("%s: %s", job.video, e)
+            failed.append((job.video, str(e)))
             worst = max(worst, e.exit_code)
 
-    if len(jobs) > 1 or any(scanned for _, scanned in jobs):
+    if batch:
         _log_summary(tally, failed)
     return worst
 
@@ -262,23 +270,19 @@ def _init_config(parser: argparse.ArgumentParser, path: Path | None) -> int:
     return 0
 
 
-def _collect_jobs(
-    paths: list[Path], s, *, recursive: bool
-) -> list[tuple[Path, bool]]:
-    """Expand directory arguments into (video, scanned=True) jobs; files pass through."""
-    from .scan import iter_videos
+def _log_plan(plan) -> None:
+    """One line between "found N videos" and execution: what's about to happen."""
+    from .plan import Action
 
-    jobs: list[tuple[Path, bool]] = []
-    for path in paths:
-        if not path.is_dir():
-            jobs.append((path, False))
-            continue
-        if not recursive:
-            log.info("%s is a directory; scanning recursively", path)
-        found = list(iter_videos(path, s.extensions))
-        log.info("%s: found %d video%s", path, len(found), "" if len(found) == 1 else "s")
-        jobs.extend((v, True) for v in found)
-    return jobs
+    n = len(plan.jobs)
+    new = sum(j.action is Action.NEW for j in plan.jobs)
+    parts = [f"{k} {label}" for k, label in (
+        (new, "new"),
+        (n - new, "replacing existing"),
+        (plan.up_to_date, "up to date"),
+    ) if k]
+    detail = f" ({', '.join(parts)})" if parts else ""
+    log.info("generating %d contact sheet%s%s", n, "" if n == 1 else "s", detail)
 
 
 def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
@@ -349,58 +353,32 @@ def _render(file_path: Path, s):
     return build_sheet(info, frames, s, aspect), total
 
 
-def _process_one(file_path: Path, s, out_path: Path | None = None, before_save=None) -> int:
-    from .output import resolve_output_path, save_sheet
+def _run_job(job, s) -> None:
+    """Render job.video and write it to job.out (setting aside junk first)."""
+    from .output import save_sheet
+    from .plan import Action
 
     start = time.monotonic()
-    img, n_caps = _render(file_path, s)
-    out_path = out_path or resolve_output_path(file_path, s)
-    if before_save is not None:
-        before_save()
-    written = save_sheet(img, out_path, s)
+    img, n_caps = _render(job.video, s)
+    if job.action is Action.REPLACE_BAD:
+        _set_aside_bad(job.out)  # only once the new sheet is ready to write
+    written = save_sheet(img, job.out, s)
     elapsed = time.monotonic() - start
     log.info(
         "wrote %s (%dx%d, %d captures, %.1fs)",
         written, img.width, img.height, n_caps, elapsed,
     )
-    return 0
 
 
-def _process_scanned(file_path: Path, s) -> str:
-    """Directory-scan mode: sheet goes next to the video and is only (re)made when
-    missing, not a valid image, narrower than s.min_width (if set), or when
-    s.regenerate is on. Returns a tally key."""
+def _set_aside_bad(out: Path) -> None:
     from .errors import OutputError
-    from .output import resolve_output_path
-    from .scan import Existing, check_existing, set_aside
+    from .scan import set_aside
 
-    out = resolve_output_path(file_path, s, base_dir=file_path.parent)
-    status, width = check_existing(out, s.format, s.min_width)
-
-    if status is Existing.OK and not s.regenerate:
-        log.debug("%s: up to date (%s, %dpx wide)", file_path, out.name, width)
-        return "up_to_date"
-    if status is Existing.UNDERSIZED:
-        log.info("%s: existing %s is %dpx wide (< %d); regenerating",
-                 file_path, out.name, width, s.min_width)
-    elif status is Existing.BAD:
-        log.warning("%s: existing %s is not a valid %s image; it will be set aside",
-                    file_path, out.name, s.format.upper())
-
-    def set_aside_bad() -> None:
-        try:
-            moved = set_aside(out)
-        except OSError as e:
-            raise OutputError(f"could not rename {out}: {e}") from None
-        log.warning("moved %s -> %s", out, moved.name)
-
-    _process_one(
-        file_path,
-        s,
-        out_path=out,
-        before_save=set_aside_bad if status is Existing.BAD else None,
-    )
-    return "generated" if status is Existing.MISSING else "regenerated"
+    try:
+        moved = set_aside(out)
+    except OSError as e:
+        raise OutputError(f"could not rename {out}: {e}") from None
+    log.warning("moved %s -> %s", out, moved.name)
 
 
 if __name__ == "__main__":

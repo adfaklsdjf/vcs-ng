@@ -55,7 +55,7 @@ For each video, whatever already exists at the output path decides what happens:
 | valid image of the configured format, narrower than `min_width` (only if `--min-width`/`min_width` is set) | regenerate |
 | anything else (truncated/corrupt, wrong format, not an image) | rename to `NAME.bad`, then generate |
 
-`--regenerate` regenerates every sheet, even up-to-date ones. Failures are logged and the run continues; a summary and the list of failed files are printed at the end. Sheets are written to a hidden temporary file and renamed into place, so an interrupted run never leaves a half-written sheet.
+All of this is decided up front: vcsng reports how many videos it found, then how many sheets it will generate (new vs. replacing existing, and how many are up to date), before rendering anything. `--regenerate` regenerates every sheet, even up-to-date ones. Failures are logged and the run continues; a summary and the list of failed files are printed at the end. Sheets are written to a hidden temporary file and renamed into place, so an interrupted run never leaves a half-written sheet.
 
 ### Existing sheets are kept, not overwritten
 

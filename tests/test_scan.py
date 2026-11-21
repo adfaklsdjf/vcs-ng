@@ -210,6 +210,7 @@ def test_cli_scan_without_min_width_keeps_any_valid_sheet(synthetic_video, tmp_p
     assert Image.open(root / "small-ss.jpg").width == 300
     assert (root / "new-ss.jpg").exists()
     assert not (root / "small-ss-old.jpg").exists()
+    assert "generating 1 contact sheet (1 new, 1 up to date)" in caplog.text
     assert "1 generated, 1 up to date, 0 failed" in caplog.text
 
 
@@ -221,6 +222,7 @@ def test_cli_scan_regenerate_renames_old(synthetic_video, tmp_path, caplog):
         assert main([*_SCAN_ARGS, "--regenerate", str(root)]) == 0
     assert Image.open(root / "small-ss.jpg").width > 300
     assert Image.open(root / "small-ss-old.jpg").width == 300
+    assert "generating 2 contact sheets (1 new, 1 replacing existing)" in caplog.text
     assert "1 generated, 1 regenerated, 0 failed" in caplog.text
 
 
