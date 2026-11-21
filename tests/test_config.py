@@ -219,3 +219,67 @@ def test_config_file_not_found_raises(tmp_path):
 def test_unknown_settings_from_cli_raises():
     with pytest.raises(UsageError):
         build_settings({"not_a_field": 1}, no_config=True)
+
+
+# --- reference config / --init-config ---------------------------------------
+
+def _uncommented_example() -> str:
+    """The example config with every '# key = value' setting line uncommented."""
+    import re
+
+    from vcsng.config import example_config_text
+
+    return re.sub(r"(?m)^# (\w+ = )", r"\1", example_config_text())
+
+
+def test_example_config_lists_every_key():
+    import tomllib
+
+    from vcsng.config import _META_STYLE, _section_schema
+
+    data = tomllib.loads(_uncommented_example())
+    for section, keys in _section_schema().items():
+        expected = set(keys) - set(_META_STYLE)  # *_all shorthands are described in prose
+        assert set(data.get(section, {})) == expected, section
+
+
+def test_example_config_values_match_defaults(tmp_path):
+    from dataclasses import fields
+
+    cfg = write_toml(tmp_path / "config.toml", _uncommented_example())
+    loaded = load_config_file(cfg)
+    defaults = Settings()
+    for f in fields(Settings):
+        default = getattr(defaults, f.name)
+        if f.name in loaded and default is not None:  # unset-by-default keys show examples
+            assert loaded[f.name] == default, f.name
+
+
+def test_example_config_as_shipped_is_all_defaults(tmp_path):
+    from vcsng.config import example_config_text
+
+    cfg = write_toml(tmp_path / "config.toml", example_config_text())
+    assert build_settings({}, config_path=cfg) == Settings()
+
+
+def test_init_config_writes_and_refuses_to_clobber(tmp_path, capsys):
+    from vcsng.cli import main
+    from vcsng.config import example_config_text
+
+    target = tmp_path / "sub" / "config.toml"
+    assert main(["--init-config", "--config", str(target)]) == 0
+    assert target.read_text() == example_config_text()
+
+    target.write_text("# mine\n")
+    with pytest.raises(SystemExit):
+        main(["--init-config", "--config", str(target)])
+    assert "already exists" in capsys.readouterr().err
+    assert target.read_text() == "# mine\n"
+
+
+def test_init_config_default_location(tmp_path, monkeypatch):
+    from vcsng.cli import main
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert main(["--init-config"]) == 0
+    assert (tmp_path / "vcsng" / "config.toml").is_file()

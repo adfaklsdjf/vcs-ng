@@ -187,6 +187,19 @@ def default_config_path() -> Path:
     return config_dir() / "config.toml"
 
 
+def example_config_text() -> str:
+    """The bundled reference config: every key, commented out, at its default."""
+    return (resources.files("vcsng.data") / "config.example.toml").read_text(encoding="utf-8")
+
+
+def write_example_config(path: Path) -> None:
+    """Write the reference config to path; refuses to replace an existing file."""
+    if path.exists() or path.is_symlink():
+        raise UsageError(f"{path} already exists; not overwriting it")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(example_config_text(), encoding="utf-8")
+
+
 def load_config_file(path: Path) -> dict:
     """Parse a TOML config/profile into a flat {field: parsed value} dict."""
     try:

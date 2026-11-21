@@ -128,6 +128,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", action="append", dest="profile", default=[])
     p.add_argument("--config", type=Path, default=None)
     p.add_argument("--no-config", action="store_true", default=False)
+    p.add_argument(
+        "--init-config", action="store_true", default=False,
+        help="write a config file listing every setting (commented out, at its default) "
+        "to the default location, or to --config PATH, then exit",
+    )
 
     verbosity = p.add_mutually_exclusive_group()
     verbosity.add_argument("-v", "--verbose", action="store_true", default=False)
@@ -140,7 +145,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _cli_overrides(args: argparse.Namespace) -> dict:
     overrides = vars(args).copy()
-    for key in ("files", "recursive", "profile", "config", "no_config", "verbose", "quiet"):
+    for key in ("files", "recursive", "profile", "config", "no_config", "init_config",
+                "verbose", "quiet"):
         overrides.pop(key, None)
 
     stamps = overrides.pop("stamp", None)
@@ -184,6 +190,9 @@ def main(argv: list[str] | None = None) -> int:
     # Pillow (and other libraries) emit noisy DEBUG records like "STREAM b'IDAT'";
     # keep third-party loggers quiet even when our own logger is at DEBUG.
     logging.getLogger("PIL").setLevel(logging.WARNING)
+
+    if args.init_config:
+        return _init_config(parser, args.config)
 
     paths = list(args.files)
     if not paths:
@@ -236,6 +245,21 @@ def main(argv: list[str] | None = None) -> int:
     if len(jobs) > 1 or any(scanned for _, scanned in jobs):
         _log_summary(tally, failed)
     return worst
+
+
+def _init_config(parser: argparse.ArgumentParser, path: Path | None) -> int:
+    from .config import default_config_path, write_example_config
+
+    path = path or default_config_path()
+    try:
+        write_example_config(path)
+    except UsageError as e:
+        parser.error(str(e))
+    except OSError as e:
+        log.error("could not write %s: %s", path, e.strerror)
+        return 1
+    log.info("wrote %s", path)
+    return 0
 
 
 def _collect_jobs(
