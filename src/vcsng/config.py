@@ -81,8 +81,8 @@ class Settings:
     pts_tstamps: int = 14
     pts_sign: int = 10
     pts_title: int = 33
-    tstamp_pad_x: int = 10  # px between timestamp text and its bg box edge
-    tstamp_pad_y: int = 10
+    tstamp_pad_x: int = 5  # px between timestamp text and its bg box edge
+    tstamp_pad_y: int = 5
     # output
     format: str = "png"  # png | jpeg
     quality: int = 92
