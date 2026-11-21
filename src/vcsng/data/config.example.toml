@@ -1,0 +1,75 @@
+# vcs-ng configuration
+#
+# Location: ~/.config/vcsng/config.toml (or $XDG_CONFIG_HOME/vcsng/config.toml).
+# Layering, later wins: built-in defaults < this file < --profile file(s) < CLI flags.
+#
+# Every setting is listed below, commented out, with its built-in default.
+# Uncomment and edit the ones you want to change. Settings that are unset by
+# default show an example value instead and say "(default: unset)".
+# The matching CLI flag, where there is one, is noted in each comment.
+
+[capture]
+# mode = "numcaps"           # numcaps | interval | manual (inferred from numcaps/interval if omitted)
+# numcaps = 16               # -n/--numcaps: number of evenly spaced captures
+# interval = "5m"            # -i/--interval: capture every N (timespecs like "1m30s")
+# from = "0s"                # --from: start capturing here
+# to = "5m"                  # --to: stop capturing here (default: unset, i.e. end of video)
+# end_offset = "5%"          # --end-offset: skip this much off the end (percent or seconds)
+# skip_short = false         # --skip-short: skip videos too short for the interval
+                             #   (false = fall back to a single centered capture)
+
+[layout]
+# columns = 4                # -c/--columns
+# height = "100%"            # -H/--height: thumbnail height, percent of source or pixels (e.g. 330)
+# padding = 2                # -p/--padding: px between thumbnails
+# aspect = "auto"            # -a/--aspect: auto | keep | explicit ratio like "16:9"
+# shadows = true             # --no-shadows sets this false
+# timestamps = true          # --no-timestamps sets this false
+
+[style]
+# Colors are names ("black", "slategray") or hex ("#afcd7a").
+# Fonts are an installed family name or a path to a TTF/OTF file.
+# bg_all / fg_all / font_all set every bg_*, fg_*, or font_* key at once, e.g. bg_all = "black"
+# (individual keys below still override their shorthand).
+# bg_heading = "#afcd7a"     # --bg-heading
+# fg_heading = "black"       # --fg-heading
+# bg_sign = "slategray"      # --bg-sign
+# fg_sign = "black"          # --fg-sign
+# bg_title = "white"         # --bg-title
+# fg_title = "black"         # --fg-title
+# bg_contact = "white"       # --bg-contact
+# bg_tstamps = "black"       # --bg-tstamps
+# fg_tstamps = "white"       # --fg-tstamps
+# font_heading = "DejaVuSans" # --font-heading
+# font_tstamps = "DejaVuSans" # --font-tstamps
+# font_sign = "DejaVuSans"   # --font-sign
+# font_title = "DejaVuSans"  # --font-title
+# pts_heading = 14           # --pts-heading
+# pts_tstamps = 14           # --pts-tstamps
+# pts_sign = 10              # --pts-sign
+# pts_title = 33             # --pts-title
+# tstamp_pad_x = 5           # --tstamp-pad-x: px between timestamp text and its box edge
+# tstamp_pad_y = 5           # --tstamp-pad-y
+
+[output]
+# format = "png"             # -f/--format: png | jpeg
+# quality = 92               # -q/--quality (JPEG only)
+# output = "{stem}.{ext}"    # -o/--output template: {stem} {name} {dir} {ext} (default: unset, same as shown)
+# suffix = ""                # --suffix: appended to {stem} before the extension, e.g. "-ss"
+# overwrite = false          # --overwrite: replace existing sheets in place
+                             #   (false = rename the old one to NAME-old.EXT, NAME-old1.EXT, ...)
+
+[scan]
+# Used when scanning directories (-r or a directory argument).
+# min_width = 2000           # --min-width: also regenerate existing sheets narrower than this,
+                             #   unless a new sheet (predicted via ffprobe) would be narrower too
+                             #   (default: unset, i.e. any valid existing sheet is kept)
+# extensions = ["3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogv", "rm", "rmvb", "webm", "wmv"]
+                             # --extensions (comma-separated on the CLI)
+
+[general]
+# anonymous = false          # --anonymous: omit the signature line
+# credit = true              # --no-credit sets this false
+# signature = "Preview created by" # --signature
+# username = "yourname"      # --username (default: unset, i.e. your login name)
+# workers = 8                # -j/--workers: parallel ffmpeg processes (default: unset, i.e. CPU count)

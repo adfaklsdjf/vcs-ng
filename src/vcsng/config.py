@@ -81,14 +81,14 @@ class Settings:
     pts_tstamps: int = 14
     pts_sign: int = 10
     pts_title: int = 33
-    tstamp_pad_x: int = 10  # px between timestamp text and its bg box edge
-    tstamp_pad_y: int = 10
+    tstamp_pad_x: int = 5  # px between timestamp text and its bg box edge
+    tstamp_pad_y: int = 5
     # output
     format: str = "png"  # png | jpeg
     quality: int = 92
     output: str | None = None  # -o template: {stem} {name} {dir} {ext}
     suffix: str = ""  # appended to {stem} before the extension, e.g. "-ss"
-    overwrite: bool = False
+    overwrite: bool = False  # clobber existing sheets instead of renaming them NAME-old.EXT
     # general
     anonymous: bool = False
     credit: bool = True  # show the "Created with vcs-ng <version>" line
@@ -97,7 +97,8 @@ class Settings:
     workers: int | None = None
     # directory scanning (-r / directory arguments)
     extensions: tuple[str, ...] = DEFAULT_EXTENSIONS
-    min_width: int = 2000  # existing sheets narrower than this are regenerated
+    min_width: int | None = None  # if set, existing sheets narrower than this are regenerated
+    regenerate: bool = False  # CLI-only: regenerate even up-to-date sheets
 
 
 _META_STYLE = {
@@ -184,6 +185,19 @@ def config_dir() -> Path:
 
 def default_config_path() -> Path:
     return config_dir() / "config.toml"
+
+
+def example_config_text() -> str:
+    """The bundled reference config: every key, commented out, at its default."""
+    return (resources.files("vcsng.data") / "config.example.toml").read_text(encoding="utf-8")
+
+
+def write_example_config(path: Path) -> None:
+    """Write the reference config to path; refuses to replace an existing file."""
+    if path.exists() or path.is_symlink():
+        raise UsageError(f"{path} already exists; not overwriting it")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(example_config_text(), encoding="utf-8")
 
 
 def load_config_file(path: Path) -> dict:

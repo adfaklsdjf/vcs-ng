@@ -18,6 +18,7 @@ from .render import (
     heading_block,
     placeholder_tile,
     scale_pts,
+    shadow_growth,
     text_block,
 )
 from .values import Percent, pretty_duration, pretty_size, pretty_stamp
@@ -26,17 +27,38 @@ if TYPE_CHECKING:
     from .probe import VideoInfo
 
 
-def _resolve_thumb_h(
-    s: Settings, frames: list[tuple[float, Image.Image | None]], info
-) -> int:
+# --- geometry -------------------------------------------------------------
+# Shared by build_sheet and predict_sheet_width so the prediction can't drift
+# from what actually gets rendered.
+
+def _thumb_size(s: Settings, source_h: int, aspect: Fraction) -> tuple[int, int]:
+    """Thumbnail (w, h) before shadows; source_h is the captured frame height."""
     if isinstance(s.height, Percent):
-        base = info.height
-        for _, im in frames:
-            if im is not None:
-                base = im.height
-                break
-        return max(int(round(s.height.resolve(base))), 1)
-    return max(int(s.height), 1)
+        h = max(int(round(s.height.resolve(source_h))), 1)
+    else:
+        h = max(int(s.height), 1)
+    return max(int(round(h * aspect)), 1), h
+
+
+def _grid(n: int, thumb: tuple[int, int], s: Settings) -> tuple[int, int, int, int]:
+    """(cols, rows, cell_w, cell_h) for n tiles of the given thumbnail size."""
+    tile_w, tile_h = thumb
+    if s.shadows:
+        grow_w, grow_h = shadow_growth()
+        tile_w, tile_h = tile_w + grow_w, tile_h + grow_h
+    cols = max(min(s.columns, n), 1)
+    rows = math.ceil(n / cols) if n else 0
+    return cols, rows, tile_w + 2 * s.padding, tile_h + 2 * s.padding
+
+
+def predict_sheet_width(info: VideoInfo, n_caps: int, s: Settings) -> int:
+    """Width build_sheet would produce for this video, without capturing frames."""
+    from .aspect import resolve_aspect
+
+    aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
+    cols, _, cell_w, _ = _grid(n_caps, _thumb_size(s, info.height, aspect), s)
+    grid_w = cell_w * cols
+    return max(grid_w, _heading(info, s, grid_w).width)
 
 
 def _heading(info, s: Settings, width: int) -> Image.Image:
@@ -96,8 +118,8 @@ def build_sheet(
 ) -> Image.Image:
     from .render import parse_color
 
-    thumb_h = _resolve_thumb_h(s, frames, info)
-    thumb_w = max(int(round(thumb_h * aspect)), 1)
+    source_h = next((im.height for _, im in frames if im is not None), info.height)
+    thumb_w, thumb_h = _thumb_size(s, source_h, aspect)
     bg_contact = parse_color(s.bg_contact)
 
     ts_font = load_font(s.font_tstamps, scale_pts(s.pts_tstamps, thumb_h))
@@ -117,11 +139,7 @@ def build_sheet(
             tile = drop_shadow(tile)
         tiles.append(tile)
 
-    n = len(tiles)
-    cols = max(min(s.columns, n), 1)
-    rows = math.ceil(n / cols) if n else 0
-    cell_w = (tiles[0].width if tiles else thumb_w) + 2 * s.padding
-    cell_h = (tiles[0].height if tiles else thumb_h) + 2 * s.padding
+    cols, rows, cell_w, cell_h = _grid(len(tiles), (thumb_w, thumb_h), s)
     grid_w = cell_w * cols
     grid_h = cell_h * rows
     grid = Image.new("RGBA", (max(grid_w, 1), max(grid_h, 1)), bg_contact)
