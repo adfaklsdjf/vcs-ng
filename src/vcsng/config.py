@@ -88,7 +88,7 @@ class Settings:
     quality: int = 92
     output: str | None = None  # -o template: {stem} {name} {dir} {ext}
     suffix: str = ""  # appended to {stem} before the extension, e.g. "-ss"
-    overwrite: bool = False
+    overwrite: bool = False  # clobber existing sheets instead of renaming them NAME-old.EXT
     # general
     anonymous: bool = False
     credit: bool = True  # show the "Created with vcs-ng <version>" line
@@ -97,7 +97,8 @@ class Settings:
     workers: int | None = None
     # directory scanning (-r / directory arguments)
     extensions: tuple[str, ...] = DEFAULT_EXTENSIONS
-    min_width: int = 2000  # existing sheets narrower than this are regenerated
+    min_width: int | None = None  # if set, existing sheets narrower than this are regenerated
+    regenerate: bool = False  # CLI-only: regenerate even up-to-date sheets
 
 
 _META_STYLE = {

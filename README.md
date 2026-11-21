@@ -51,11 +51,15 @@ For each video, whatever already exists at the output path decides what happens:
 | Existing output | Action |
 |---|---|
 | nothing | generate |
-| valid image of the configured format, ≥ `min_width` px wide | skip (up to date) |
-| valid image of the configured format, narrower than `min_width` | regenerate, overwrite |
+| valid image of the configured format | skip (up to date) |
+| valid image of the configured format, narrower than `min_width` (only if `--min-width`/`min_width` is set) | regenerate |
 | anything else (truncated/corrupt, wrong format, not an image) | rename to `NAME.bad`, then generate |
 
-`--overwrite` regenerates everything (still renaming non-images rather than overwriting them). Failures are logged and the run continues; a summary and the list of failed files are printed at the end. Sheets are written to a hidden temporary file and renamed into place, so an interrupted run never leaves a half-written sheet.
+`--regenerate` regenerates every sheet, even up-to-date ones. Failures are logged and the run continues; a summary and the list of failed files are printed at the end. Sheets are written to a hidden temporary file and renamed into place, so an interrupted run never leaves a half-written sheet.
+
+### Existing sheets are kept, not overwritten
+
+Whenever a new sheet replaces an existing one (single files or scans), the old one is renamed rather than overwritten: `video-ss.jpg` becomes `video-ss-old.jpg`, then `video-ss-old1.jpg`, `video-ss-old2.jpg`, and so on. The rename only happens once the new sheet has been fully written. Pass `--overwrite` (or set `[output] overwrite = true`) to replace sheets in place instead. Corrupt/non-image files found while scanning are always renamed to `NAME.bad`, never overwritten.
 
 Configuration lives at `~/.config/vcsng/config.toml`; named presets at `~/.config/vcsng/profiles/NAME.toml` (built-ins: `black`, `white`, `compact`, `mosaic`). Run `vcsng --help` for the full flag reference.
 
@@ -116,10 +120,11 @@ format = "png"            # -f/--format (png | jpeg/jpg)
 quality = 92               # -q/--quality (JPEG only)
 output = "{stem}.{ext}"     # -o/--output template ({stem} {name} {dir} {ext})
 suffix = "-ss"               # --suffix, appended to {stem} before the extension
-overwrite = false             # --overwrite
+overwrite = false             # --overwrite; replace existing sheets instead of renaming them NAME-old.EXT
 
 [scan]                    # used when scanning directories (-r or a directory argument)
 min_width = 2000           # --min-width; existing sheets narrower than this are regenerated
+                           # (off unless set; setting it here turns it on)
 # extensions = ["3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m4v", "mkv", "mov",
 #               "mp4", "mpeg", "mpg", "mts", "ogv", "rm", "rmvb", "webm", "wmv"]
 #                          # --extensions (comma-separated); default shown
@@ -132,7 +137,7 @@ username = "yourname"       # --username
 workers = 8                  # -j/--workers (parallel ffmpeg capture processes; default: CPU count)
 ```
 
-A few flags are intentionally CLI-only and have no config equivalent because they're inherently per-run/per-file, not sensible defaults: `-S/--stamp` (one-off manual timestamps) and `-T/--title` (the contact sheet heading).
+A few flags are intentionally CLI-only and have no config equivalent because they're inherently per-run/per-file, not sensible defaults: `-S/--stamp` (one-off manual timestamps), `-T/--title` (the contact sheet heading), and `--regenerate` (redo every sheet in a scan).
 
 ## Development
 

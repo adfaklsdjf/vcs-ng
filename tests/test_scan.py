@@ -72,7 +72,8 @@ def test_scan_section_from_config(tmp_path):
 
 def test_scan_defaults():
     s = build_settings({}, no_config=True)
-    assert s.min_width == 2000
+    assert s.min_width is None
+    assert s.regenerate is False
     assert "mkv" in s.extensions and "webm" in s.extensions
 
 
@@ -88,6 +89,7 @@ def test_check_existing_width(tmp_path, fmt, ext):
     Image.new("RGB", (2100, 10)).save(p, format=fmt.upper())
     assert check_existing(p, fmt, 2000) == (Existing.OK, 2100)
     assert check_existing(p, fmt, 2200) == (Existing.UNDERSIZED, 2100)
+    assert check_existing(p, fmt, None) == (Existing.OK, 2100)
 
 
 def test_check_existing_wrong_format_is_bad(tmp_path):
@@ -166,8 +168,9 @@ def test_cli_recursive_scan(synthetic_video, tmp_path, monkeypatch, caplog):
     assert "is a directory; scanning recursively" in caplog.text
     # untouched: already wide enough
     assert Image.open(root / "a" / "good-ss.jpg").width == 5000
-    # regenerated in place
+    # regenerated; the old one is kept as -old
     assert Image.open(root / "a" / "small-ss.jpg").width >= 600
+    assert Image.open(root / "a" / "small-ss-old.jpg").width == 300
     # junk and corrupt set aside, then regenerated
     assert (root / "b" / "junk-ss.jpg.bad").read_text() == "??"
     assert (root / "b" / "corrupt-ss.jpg.bad").exists()
@@ -186,3 +189,45 @@ def test_cli_recursive_scan(synthetic_video, tmp_path, monkeypatch, caplog):
         main([*args, "-r"])
     assert "0 generated" not in caplog.text
     assert "5 up to date, 1 failed" in caplog.text
+
+
+def _scan_tree(synthetic_video, root: Path) -> None:
+    root.mkdir()
+    shutil.copy(synthetic_video, root / "small.mp4")
+    shutil.copy(synthetic_video, root / "new.mp4")
+    Image.new("RGB", (300, 10)).save(root / "small-ss.jpg", format="JPEG")
+
+
+_SCAN_ARGS = ["--no-config", "-n", "2", "-f", "jpeg", "--suffix=-ss"]
+
+
+@pytest.mark.ffmpeg
+def test_cli_scan_without_min_width_keeps_any_valid_sheet(synthetic_video, tmp_path, caplog):
+    root = tmp_path / "media"
+    _scan_tree(synthetic_video, root)
+    with caplog.at_level(logging.INFO, logger="vcsng"):
+        assert main([*_SCAN_ARGS, str(root)]) == 0
+    assert Image.open(root / "small-ss.jpg").width == 300
+    assert (root / "new-ss.jpg").exists()
+    assert not (root / "small-ss-old.jpg").exists()
+    assert "1 generated, 1 up to date, 0 failed" in caplog.text
+
+
+@pytest.mark.ffmpeg
+def test_cli_scan_regenerate_renames_old(synthetic_video, tmp_path, caplog):
+    root = tmp_path / "media"
+    _scan_tree(synthetic_video, root)
+    with caplog.at_level(logging.INFO, logger="vcsng"):
+        assert main([*_SCAN_ARGS, "--regenerate", str(root)]) == 0
+    assert Image.open(root / "small-ss.jpg").width > 300
+    assert Image.open(root / "small-ss-old.jpg").width == 300
+    assert "1 generated, 1 regenerated, 0 failed" in caplog.text
+
+
+@pytest.mark.ffmpeg
+def test_cli_scan_regenerate_overwrite_clobbers(synthetic_video, tmp_path):
+    root = tmp_path / "media"
+    _scan_tree(synthetic_video, root)
+    assert main([*_SCAN_ARGS, "--regenerate", "--overwrite", str(root)]) == 0
+    assert Image.open(root / "small-ss.jpg").width > 300
+    assert sorted(p.name for p in root.glob("*.jpg")) == ["new-ss.jpg", "small-ss.jpg"]

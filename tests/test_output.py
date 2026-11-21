@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from vcsng.config import Settings
-from vcsng.errors import UsageError
+from vcsng.errors import OutputError, UsageError
 from vcsng.output import resolve_output_path, save_sheet
 
 
@@ -64,20 +64,32 @@ def _tiny_image(mode="RGB", color=(255, 0, 0)) -> Image.Image:
     return Image.new(mode, (4, 4), color)
 
 
-def test_save_sheet_safe_rename_sequence(tmp_path):
-    target = tmp_path / "sheet.png"
+def _color_at(path: Path) -> tuple:
+    with Image.open(path) as img:
+        return img.convert("RGB").getpixel((0, 0))
+
+
+def test_save_sheet_renames_existing_to_old(tmp_path):
+    target = tmp_path / "sheet-ss.png"
     s = _settings(format="png", overwrite=False)
+    red, green, blue = (255, 0, 0), (0, 255, 0), (0, 0, 255)
 
-    p1 = save_sheet(_tiny_image(), target, s)
-    assert p1 == target
+    for color in (red, green, blue):
+        assert save_sheet(_tiny_image(color=color), target, s) == target
 
-    p2 = save_sheet(_tiny_image(), target, s)
-    assert p2 == tmp_path / "sheet-1.png"
+    # newest at the intended name; older ones retired as -old, -old1, ...
+    assert _color_at(target) == blue
+    assert _color_at(tmp_path / "sheet-ss-old.png") == red
+    assert _color_at(tmp_path / "sheet-ss-old1.png") == green
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "sheet-ss-old.png", "sheet-ss-old1.png", "sheet-ss.png",
+    ]
 
-    p3 = save_sheet(_tiny_image(), target, s)
-    assert p3 == tmp_path / "sheet-2.png"
 
-    assert p1.exists() and p2.exists() and p3.exists()
+def test_save_sheet_rejects_directory_target(tmp_path):
+    (tmp_path / "sheet.png").mkdir()
+    with pytest.raises(OutputError):
+        save_sheet(_tiny_image(), tmp_path / "sheet.png", _settings(format="png"))
 
 
 def test_save_sheet_overwrite_clobbers(tmp_path):
@@ -88,8 +100,8 @@ def test_save_sheet_overwrite_clobbers(tmp_path):
     written = save_sheet(_tiny_image(color=(0, 0, 255)), target, s_over)
 
     assert written == target
-    with Image.open(written) as img:
-        assert img.convert("RGB").getpixel((0, 0)) == (0, 0, 255)
+    assert _color_at(written) == (0, 0, 255)
+    assert list(tmp_path.iterdir()) == [target]
 
 
 def test_save_sheet_jpeg_flattens_rgba(tmp_path):

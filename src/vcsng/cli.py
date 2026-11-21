@@ -8,7 +8,6 @@ import logging
 import sys
 import time
 from collections import Counter
-from dataclasses import replace
 from pathlib import Path
 
 from . import __version__
@@ -39,8 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-r", "--recursive", action="store_true", default=False,
         help="scan directories recursively for videos (current directory if no PATH given); "
-        "sheets go next to each video, skipping ones that already exist and are at "
-        "least --min-width wide",
+        "sheets go next to each video, skipping videos that already have a valid sheet",
     )
     p.add_argument(
         "--extensions", type=str, default=argparse.SUPPRESS,
@@ -48,7 +46,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--min-width", dest="min_width", type=int, default=argparse.SUPPRESS,
-        help="when scanning, regenerate existing sheets narrower than this (default 2000)",
+        help="when scanning, also regenerate existing sheets narrower than this many px "
+        "(default: off)",
+    )
+    p.add_argument(
+        "--regenerate", action="store_true", default=argparse.SUPPRESS,
+        help="when scanning, regenerate every sheet, even ones that are up to date",
     )
 
     caps = p.add_mutually_exclusive_group()
@@ -115,7 +118,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "-f", "--format", choices=["png", "jpeg", "jpg"], default=argparse.SUPPRESS
     )
     p.add_argument("-q", "--quality", type=int, default=argparse.SUPPRESS)
-    p.add_argument("--overwrite", action="store_true", default=argparse.SUPPRESS)
+    p.add_argument(
+        "--overwrite", action="store_true", default=argparse.SUPPRESS,
+        help="replace existing sheets in place (default: rename the old one to NAME-old.EXT)",
+    )
 
     p.add_argument("-j", "--workers", type=int, default=argparse.SUPPRESS)
 
@@ -338,7 +344,8 @@ def _process_one(file_path: Path, s, out_path: Path | None = None, before_save=N
 
 def _process_scanned(file_path: Path, s) -> str:
     """Directory-scan mode: sheet goes next to the video and is only (re)made when
-    missing, narrower than s.min_width, or not a valid image. Returns a tally key."""
+    missing, not a valid image, narrower than s.min_width (if set), or when
+    s.regenerate is on. Returns a tally key."""
     from .errors import OutputError
     from .output import resolve_output_path
     from .scan import Existing, check_existing, set_aside
@@ -346,7 +353,7 @@ def _process_scanned(file_path: Path, s) -> str:
     out = resolve_output_path(file_path, s, base_dir=file_path.parent)
     status, width = check_existing(out, s.format, s.min_width)
 
-    if status is Existing.OK and not s.overwrite:
+    if status is Existing.OK and not s.regenerate:
         log.debug("%s: up to date (%s, %dpx wide)", file_path, out.name, width)
         return "up_to_date"
     if status is Existing.UNDERSIZED:
@@ -365,7 +372,7 @@ def _process_scanned(file_path: Path, s) -> str:
 
     _process_one(
         file_path,
-        replace(s, overwrite=True),
+        s,
         out_path=out,
         before_save=set_aside_bad if status is Existing.BAD else None,
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -10,6 +11,8 @@ from PIL import Image
 
 from .config import Settings
 from .errors import OutputError, UsageError
+
+log = logging.getLogger("vcsng")
 
 _TOKEN_RE = re.compile(r"\{(\w+)\}")
 _VALID_TOKENS = {"stem", "name", "dir", "ext"}
@@ -39,23 +42,25 @@ def resolve_output_path(input_path: Path, s: Settings, base_dir: Path | None = N
     return result if result.is_absolute() else (base_dir or Path.cwd()) / result
 
 
-def _safe_path(path: Path) -> Path:
-    if not path.exists():
-        return path
-    stem, suffix = path.stem, path.suffix
-    parent = path.parent
-    n = 1
+def _old_path(path: Path) -> Path:
+    """First free name for retiring an existing sheet: NAME-old.EXT, then
+    NAME-old1.EXT, NAME-old2.EXT, ..."""
+    n = 0
     while True:
-        candidate = parent / f"{stem}-{n}{suffix}"
-        if not candidate.exists():
+        candidate = path.with_name(f"{path.stem}-old{n or ''}{path.suffix}")
+        if not candidate.exists() and not candidate.is_symlink():
             return candidate
         n += 1
 
 
-def save_sheet(img: Image.Image, path: Path, s: Settings) -> Path:
+def save_sheet(img: Image.Image, target: Path, s: Settings) -> Path:
     """Write via a hidden temp file + rename, so an interrupted run never leaves
-    a half-written sheet in place of a good one."""
-    target = path if s.overwrite else _safe_path(path)
+    a half-written sheet in place of a good one.
+
+    Whatever already exists at target is renamed to NAME-old.EXT (see _old_path)
+    once the new sheet is fully written, unless s.overwrite says to clobber it."""
+    if target.is_dir():
+        raise OutputError(f"output path is a directory: {target}")
     tmp = target.with_name(f".{target.name}.tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -75,6 +80,10 @@ def save_sheet(img: Image.Image, path: Path, s: Settings) -> Path:
             img_to_save.save(tmp, format="JPEG", quality=s.quality)
         else:
             img.save(tmp, format="PNG")
+        if not s.overwrite and (target.exists() or target.is_symlink()):
+            old = _old_path(target)
+            target.rename(old)
+            log.info("moved %s -> %s", target, old.name)
         os.replace(tmp, target)
     except OSError as e:
         tmp.unlink(missing_ok=True)

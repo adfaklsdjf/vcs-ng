@@ -66,8 +66,8 @@ def iter_videos(root: Path, extensions: tuple[str, ...]) -> Iterator[Path]:
 
 class Existing(Enum):
     MISSING = "missing"
-    OK = "ok"  # valid image of the expected format, wide enough
-    UNDERSIZED = "undersized"  # valid image of the expected format, too narrow
+    OK = "ok"  # valid image of the expected format (and >= min_width, if set)
+    UNDERSIZED = "undersized"  # valid image of the expected format, < min_width
     BAD = "bad"  # unreadable, truncated, wrong format, or not an image at all
 
 
@@ -88,8 +88,12 @@ def _looks_complete(path: Path, pil_format: str) -> bool:
     return True
 
 
-def check_existing(path: Path, fmt: str, min_width: int) -> tuple[Existing, int | None]:
-    """Classify whatever is at an output path. Returns (status, width)."""
+def check_existing(
+    path: Path, fmt: str, min_width: int | None
+) -> tuple[Existing, int | None]:
+    """Classify whatever is at an output path. Returns (status, width).
+
+    Width only matters when min_width is set; otherwise any valid image is OK."""
     if not path.exists() and not path.is_symlink():
         return Existing.MISSING, None
     if path.is_dir():
@@ -104,7 +108,7 @@ def check_existing(path: Path, fmt: str, min_width: int) -> tuple[Existing, int 
         return Existing.BAD, None
     if actual != expected or not _looks_complete(path, expected):
         return Existing.BAD, width
-    if width < min_width:
+    if min_width is not None and width < min_width:
         return Existing.UNDERSIZED, width
     return Existing.OK, width
 
