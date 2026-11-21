@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         return 64  # pragma: no cover — parser.error exits
 
     worst = 0
-    tally: Counter[str] = Counter(up_to_date=plan.up_to_date)
+    tally: Counter[str] = Counter(up_to_date=plan.up_to_date, too_narrow=plan.too_narrow)
     failed: list[tuple[Path, str]] = []
     for path, err in plan.failed:
         log.error("%s: %s", path, err)
@@ -280,6 +280,7 @@ def _log_plan(plan) -> None:
         (new, "new"),
         (n - new, "replacing existing"),
         (plan.up_to_date, "up to date"),
+        (plan.too_narrow, "kept, can't reach min-width"),
     ) if k]
     detail = f" ({', '.join(parts)})" if parts else ""
     log.info("generating %d contact sheet%s%s", n, "" if n == 1 else "s", detail)
@@ -290,6 +291,7 @@ def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
         ("generated", "generated"),
         ("regenerated", "regenerated"),
         ("up_to_date", "up to date"),
+        ("too_narrow", "kept (can't reach min-width)"),
         ("skipped", "skipped"),
     ) if tally[k]]
     parts.append(f"{len(failed)} failed")

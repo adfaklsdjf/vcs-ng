@@ -61,7 +61,8 @@
 
 [scan]
 # Used when scanning directories (-r or a directory argument).
-# min_width = 2000           # --min-width: also regenerate existing sheets narrower than this
+# min_width = 2000           # --min-width: also regenerate existing sheets narrower than this,
+                             #   unless a new sheet (predicted via ffprobe) would be narrower too
                              #   (default: unset, i.e. any valid existing sheet is kept)
 # extensions = ["3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogv", "rm", "rmvb", "webm", "wmv"]
                              # --extensions (comma-separated on the CLI)

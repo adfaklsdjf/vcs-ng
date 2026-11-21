@@ -153,11 +153,22 @@ def scale_pts(pts: int, thumb_height: int) -> int:
     return max(int(v), 7)
 
 
+SHADOW_RADIUS = 2
+SHADOW_OFFSET = (4, 4)
+
+
+def shadow_growth(
+    radius: int = SHADOW_RADIUS, offset: tuple[int, int] = SHADOW_OFFSET
+) -> tuple[int, int]:
+    """How many px drop_shadow adds to an image's (width, height)."""
+    return abs(offset[0]) + 2 * radius, abs(offset[1]) + 2 * radius
+
+
 def drop_shadow(
     img: Image.Image,
     *,
-    radius: int = 2,
-    offset: tuple[int, int] = (4, 4),
+    radius: int = SHADOW_RADIUS,
+    offset: tuple[int, int] = SHADOW_OFFSET,
     opacity: float = 0.5,
 ) -> Image.Image:
     """Reproduce ImageMagick `-shadow 50x2+4+4`. Returns a new RGBA image."""
@@ -166,8 +177,9 @@ def drop_shadow(
     img = img.convert("RGBA")
     ox, oy = offset
     margin = radius  # symmetric growth = radius on every side, plus offset
-    out_w = img.width + abs(ox) + 2 * margin
-    out_h = img.height + abs(oy) + 2 * margin
+    grow_w, grow_h = shadow_growth(radius, offset)
+    out_w = img.width + grow_w
+    out_h = img.height + grow_h
     canvas = Image.new("RGBA", (out_w, out_h), (0, 0, 0, 0))
 
     # black silhouette from alpha, scaled by opacity

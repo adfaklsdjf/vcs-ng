@@ -233,3 +233,24 @@ def test_cli_scan_regenerate_overwrite_clobbers(synthetic_video, tmp_path):
     assert main([*_SCAN_ARGS, "--regenerate", "--overwrite", str(root)]) == 0
     assert Image.open(root / "small-ss.jpg").width > 300
     assert sorted(p.name for p in root.glob("*.jpg")) == ["new-ss.jpg", "small-ss.jpg"]
+
+
+@pytest.mark.ffmpeg
+def test_cli_scan_keeps_sheet_when_min_width_is_unreachable(synthetic_video, tmp_path, caplog):
+    root = tmp_path / "media"
+    _scan_tree(synthetic_video, root)
+    args = [*_SCAN_ARGS, "--min-width", "5000", str(root)]
+    with caplog.at_level(logging.INFO, logger="vcsng"):
+        assert main(args) == 0
+    # 320x240 source, 2 captures: nowhere near 5000px, so small-ss.jpg is left alone
+    assert Image.open(root / "small-ss.jpg").width == 300
+    assert not (root / "small-ss-old.jpg").exists()
+    assert "but a new sheet would only be" in caplog.text
+    assert "1 generated, 1 kept (can't reach min-width), 0 failed" in caplog.text
+
+    # new-ss.jpg (also < 5000) is likewise kept on a rerun; nothing piles up
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="vcsng"):
+        assert main(args) == 0
+    assert "generating 0 contact sheets (2 kept, can't reach min-width)" in caplog.text
+    assert sorted(p.name for p in root.glob("*.jpg")) == ["new-ss.jpg", "small-ss.jpg"]

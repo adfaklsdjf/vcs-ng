@@ -84,3 +84,27 @@ def test_plan_bad_template_is_a_usage_error(tree):
     s = _settings(output="{nope}.{ext}")
     with pytest.raises(UsageError):
         build_plan(collect_inputs([tree], s, recursive=True), s)
+
+
+@pytest.mark.parametrize("predicted,expected", [
+    (1500, None),  # still < 2000: keep the old one instead of burning time on it
+    (2400, Action.REGENERATE),  # would reach min_width: regenerate
+    (None, Action.REGENERATE),  # can't predict: regenerate and let the render decide
+])
+def test_plan_undersized_uses_predicted_width(tree, monkeypatch, predicted, expected):
+    import vcsng.plan
+
+    monkeypatch.setattr(vcsng.plan, "_predict_width", lambda video, s: predicted)
+    s = _settings(min_width=2000)
+    plan = build_plan(collect_inputs([tree], s, recursive=True), s)
+    assert _actions(plan).get("narrow") is expected
+    assert plan.too_narrow == (1 if expected is None else 0)
+
+
+def test_plan_regenerate_skips_prediction(tree, monkeypatch):
+    import vcsng.plan
+
+    monkeypatch.setattr(vcsng.plan, "_predict_width", lambda video, s: pytest.fail("probed"))
+    s = _settings(min_width=2000, regenerate=True)
+    plan = build_plan(collect_inputs([tree], s, recursive=True), s)
+    assert _actions(plan)["narrow"] is Action.REGENERATE

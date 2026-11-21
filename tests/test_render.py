@@ -21,6 +21,7 @@ from vcsng.render import (
     text_block,
 )
 from vcsng.sheet import build_sheet
+from vcsng.values import Percent
 
 
 # --- parse_color ---------------------------------------------------------
@@ -296,3 +297,25 @@ def test_tstamp_padding_from_config(tmp_path):
     cfg.write_text("[style]\ntstamp_pad_x = 3\ntstamp_pad_y = 8\n")
     s = build_settings({}, config_path=cfg)
     assert (s.tstamp_pad_x, s.tstamp_pad_y) == (3, 8)
+
+
+# --- predict_sheet_width ----------------------------------------------------
+
+@pytest.mark.parametrize("n_caps", [1, 3, 7])
+@pytest.mark.parametrize("settings", [
+    {},
+    {"shadows": False, "padding": 0},
+    {"columns": 6, "height": 90, "padding": 5},
+    {"columns": 2, "height": Percent(50.0), "aspect": "keep"},
+    {"columns": 1, "height": 30, "aspect": Fraction(4, 3)},  # heading wider than grid
+])
+def test_predict_sheet_width_matches_render(n_caps, settings):
+    from vcsng.aspect import resolve_aspect
+    from vcsng.sheet import predict_sheet_width
+
+    info = _info()
+    s = Settings(**settings)
+    frames = [(float(i), Image.new("RGB", (info.width, info.height))) for i in range(n_caps)]
+    aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
+    sheet = build_sheet(info, frames, s, aspect)
+    assert predict_sheet_width(info, n_caps, s) == sheet.width

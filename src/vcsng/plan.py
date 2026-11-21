@@ -18,7 +18,7 @@ from enum import Enum
 from pathlib import Path
 
 from .config import Settings
-from .errors import OutputError
+from .errors import OutputError, VcsngError
 from .output import resolve_output_path
 from .scan import Existing, check_existing, iter_videos
 
@@ -37,6 +37,13 @@ class Action(Enum):
     REPLACE_BAD = "replace_bad"  # output path holds junk; set it aside as NAME.bad first
 
 
+class Keep(Enum):
+    """Why a scanned video's existing sheet is left alone."""
+
+    UP_TO_DATE = "up_to_date"
+    CANT_REACH_MIN_WIDTH = "cant_reach_min_width"  # a new sheet would be too narrow too
+
+
 @dataclass(frozen=True)
 class Job:
     video: Path
@@ -48,6 +55,7 @@ class Job:
 class Plan:
     jobs: list[Job] = field(default_factory=list)
     up_to_date: int = 0
+    too_narrow: int = 0  # undersized, but regenerating wouldn't reach min_width either
     failed: list[tuple[Path, OutputError]] = field(default_factory=list)
 
 
@@ -82,15 +90,17 @@ def build_plan(inputs: list[Input], s: Settings) -> Plan:
         except OutputError as e:
             plan.failed.append((inp.video, e))
             continue
-        if job is None:
+        if job is Keep.UP_TO_DATE:
             plan.up_to_date += 1
+        elif job is Keep.CANT_REACH_MIN_WIDTH:
+            plan.too_narrow += 1
         else:
             plan.jobs.append(job)
     return plan
 
 
-def _plan_scanned(video: Path, s: Settings) -> Job | None:
-    """Scanned videos get their sheet next to them. None means up to date."""
+def _plan_scanned(video: Path, s: Settings) -> Job | Keep:
+    """Scanned videos get their sheet next to them."""
     out = resolve_output_path(video, s, base_dir=video.parent)
     status, width = check_existing(out, s.format, s.min_width)
 
@@ -100,11 +110,33 @@ def _plan_scanned(video: Path, s: Settings) -> Job | None:
         log.warning("%s: existing %s is not a valid %s image; it will be set aside",
                     video, out.name, s.format.upper())
         return Job(video, out, Action.REPLACE_BAD)
+    if s.regenerate:
+        return Job(video, out, Action.REGENERATE)
     if status is Existing.UNDERSIZED:
+        predicted = _predict_width(video, s)
+        if predicted is not None and predicted < s.min_width:
+            log.info("%s: existing %s is %dpx wide (< %d), but a new sheet would only be "
+                     "%dpx; keeping it", video, out.name, width, s.min_width, predicted)
+            return Keep.CANT_REACH_MIN_WIDTH
         log.info("%s: existing %s is %dpx wide (< %d); will regenerate",
                  video, out.name, width, s.min_width)
         return Job(video, out, Action.REGENERATE)
-    if s.regenerate:
-        return Job(video, out, Action.REGENERATE)
     log.debug("%s: up to date (%s, %dpx wide)", video, out.name, width)
-    return None
+    return Keep.UP_TO_DATE
+
+
+def _predict_width(video: Path, s: Settings) -> int | None:
+    """Width a freshly rendered sheet would have, from ffprobe alone (no frame
+    captures). None if it can't be predicted; the render will then surface
+    whatever the problem is."""
+    from .probe import probe
+    from .sheet import predict_sheet_width
+    from .timestamps import compute_stamps
+
+    try:
+        info = probe(video)
+        n_caps = len(compute_stamps(info.duration, s))
+    except VcsngError as e:
+        log.debug("%s: can't predict sheet width: %s", video, e)
+        return None
+    return predict_sheet_width(info, n_caps, s)
