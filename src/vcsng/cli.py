@@ -236,10 +236,10 @@ def _run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
     worst = 0
     tally: Counter[str] = Counter(up_to_date=plan.up_to_date, too_narrow=plan.too_narrow)
-    failed: list[tuple[Path, str]] = []
+    failed: list[tuple[Path, VcsngError]] = []
     for path, err in plan.failed:
         log.error("%s: %s", path, err)
-        failed.append((path, str(err)))
+        failed.append((path, err))
         worst = max(worst, err.exit_code)
     if batch:
         _log_plan(plan)
@@ -254,7 +254,7 @@ def _run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             tally["skipped"] += 1
         except VcsngError as e:
             log.error("%s: %s", job.video, e)
-            failed.append((job.video, str(e)))
+            failed.append((job.video, e))
             worst = max(worst, e.exit_code)
 
     if batch:
@@ -301,7 +301,7 @@ def _count_list(counts: list[tuple[int, str]]) -> str:
     return ", ".join(f"%d {label.replace('%', '%%')}" for _, label in counts)
 
 
-def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
+def _log_summary(tally: Counter, failed: list[tuple[Path, VcsngError]]) -> None:
     counts = [(tally[k], label) for k, label in (
         ("generated", "generated"),
         ("regenerated", "regenerated"),
@@ -310,11 +310,12 @@ def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
         ("skipped", "skipped"),
     ) if tally[k]]
     counts.append((len(failed), "failed"))
-    log.info("done: " + _count_list(counts), *(k for k, _ in counts), extra=OK)
+    log.info("done: " + _count_list(counts), *(k for k, _ in counts),
+             extra=None if failed else OK)  # green only for a clean run
     if failed:
         log.error("failed (%d):", len(failed))
-        for path, msg in failed:
-            log.error("  %s: %s", path, msg)
+        for path, err in failed:
+            log.error("  %s: %s", path, err)
 
 
 def _log_parameters(file_path: Path, s, info, stamps) -> None:
@@ -394,7 +395,7 @@ def _set_aside_bad(out: Path) -> None:
     try:
         moved = set_aside(out)
     except OSError as e:
-        raise OutputError(f"could not rename {out}: {e}") from None
+        raise OutputError("could not rename %s", out, detail=str(e)) from None
     log.warning("moved %s -> %s", out, FileName(moved.name))
 
 

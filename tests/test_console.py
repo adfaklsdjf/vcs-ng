@@ -106,3 +106,26 @@ def test_module_helpers_drive_the_installed_handler():
         root.handlers[:] = before[0]
         root.setLevel(before[1])
     assert re.sub(STAMP, "", stream.getvalue()) == "\na\n\nb\n\n"
+
+
+def test_structured_error_parts():
+    from vcsng.errors import ProbeError
+
+    err = ProbeError("ffprobe failed on %s", Path("v.mp4"), detail="moov atom not found\nInvalid data")
+    assert str(err) == "ffprobe failed on v.mp4: moov atom not found\nInvalid data"
+    line = ConsoleFormatter(color=True).format(record("%s: %s", Path("v.mp4"), err, level=logging.ERROR))
+    body = line.split(f"{esc(0)} ", 1)[1]  # past the timestamp
+    assert body == (
+        f"{esc(96)}v.mp4{esc(0)}: {esc(91)}ffprobe failed on {esc(0)}{esc(96)}v.mp4{esc(0)}: "
+        f"{esc(93)}moov atom not found{esc(0)}\n{esc(93)}Invalid data{esc(0)}"
+    )
+
+
+def test_error_without_structure_is_all_red():
+    from vcsng.errors import OutputError
+
+    line = ConsoleFormatter(color=True).format(
+        record("%s: %s", Path("v.mp4"), OutputError("plain message"), level=logging.ERROR))
+    assert f"{esc(91)}plain message{esc(0)}" in line
+    assert f"{esc(91)}failed{esc(0)}" in ConsoleFormatter(color=True).format(
+        record("failed", level=logging.ERROR))

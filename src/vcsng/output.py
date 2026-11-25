@@ -61,7 +61,7 @@ def save_sheet(img: Image.Image, target: Path, s: Settings) -> Path:
     Whatever already exists at target is renamed to NAME-old.EXT (see _old_path)
     once the new sheet is fully written, unless s.overwrite says to clobber it."""
     if target.is_dir():
-        raise OutputError(f"output path is a directory: {target}")
+        raise OutputError("output path is a directory: %s", target)
     tmp = target.with_name(f".{target.name}.tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -88,5 +88,5 @@ def save_sheet(img: Image.Image, target: Path, s: Settings) -> Path:
         os.replace(tmp, target)
     except OSError as e:
         tmp.unlink(missing_ok=True)
-        raise OutputError(f"failed to write {target}: {e}") from None
+        raise OutputError("failed to write %s", target, detail=str(e)) from None
     return target
