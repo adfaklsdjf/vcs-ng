@@ -26,6 +26,11 @@ from .values import Percent, pretty_duration, pretty_size, pretty_stamp
 if TYPE_CHECKING:
     from .probe import VideoInfo
 
+# Pillow's decompression-bomb guard is for decoding untrusted files; it also
+# fires on crop(), which alpha_composite() uses internally, so it trips on our
+# own canvases once a sheet has enough captures (e.g. ~900 frames at 4 columns).
+Image.MAX_IMAGE_PIXELS = None
+
 
 # --- geometry -------------------------------------------------------------
 # Shared by build_sheet and predict_sheet_width so the prediction can't drift
