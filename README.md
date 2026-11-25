@@ -88,3 +88,5 @@ A few flags are intentionally CLI-only and have no config equivalent because the
 uv sync
 uv run pytest
 ```
+
+Every push to `main` is tested and released automatically. The version comes from git tags, so there is no version number to edit; see `.github/workflows/release.yml`.
