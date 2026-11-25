@@ -6,7 +6,7 @@ class VcsngError(Exception):
     so the console can style them (filenames, figures); `detail` holds output
     from an external tool or the OS, shown after the message.
 
-        raise ProbeError("ffprobe failed on %s", path, detail=stderr)
+        raise OutputError("failed to write %s", target, detail=os_error_text)
     """
 
     exit_code = 70  # EX_SOFTWARE

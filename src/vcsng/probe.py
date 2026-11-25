@@ -38,7 +38,7 @@ def probe(path: Path) -> VideoInfo:
     if proc.returncode != 0:
         stderr = proc.stderr.decode("utf-8", "replace").strip()
         snippet = stderr[-500:] if stderr else "(no stderr)"
-        raise ProbeError("ffprobe failed on %s", path, detail=snippet)
+        raise ProbeError("ffprobe failed", detail=snippet)
     data = json.loads(proc.stdout.decode("utf-8", "replace"))
     return parse_probe(data, path, path.stat().st_size)
 
@@ -101,7 +101,7 @@ def parse_probe(data: dict, path: Path, file_size: int | None = None) -> VideoIn
             video_stream = s
             break
     if video_stream is None:
-        raise ProbeError("%s: no video stream found", path)
+        raise ProbeError("no video stream found")
 
     audio_stream = None
     for s in streams:
@@ -129,7 +129,7 @@ def parse_probe(data: dict, path: Path, file_size: int | None = None) -> VideoIn
             except (ValueError, AttributeError):
                 duration = None
     if duration is None:
-        raise ProbeError("%s: could not determine duration", path)
+        raise ProbeError("could not determine duration")
 
     width = int(video_stream.get("width", 0))
     height = int(video_stream.get("height", 0))

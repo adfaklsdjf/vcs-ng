@@ -79,7 +79,12 @@ class ConsoleFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         stamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
-        line = f"{self.paint(f'[{stamp}]', 'time')} {self._body(record)}"
+        body = self._body(record)
+        if "\n" in body:  # continuation lines (e.g. tool output) align under the message
+            msg = str(record.msg)
+            indent = " " * (len(stamp) + 3 + len(msg) - len(msg.lstrip(" ")))
+            body = body.replace("\n", "\n" + indent)
+        line = f"{self.paint(f'[{stamp}]', 'time')} {body}"
         if record.exc_info:
             line += "\n" + self.formatException(record.exc_info)
         return line

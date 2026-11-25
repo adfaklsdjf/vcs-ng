@@ -117,7 +117,7 @@ def test_structured_error_parts():
     body = line.split(f"{esc(0)} ", 1)[1]  # past the timestamp
     assert body == (
         f"{esc(96)}v.mp4{esc(0)}: {esc(91)}ffprobe failed on {esc(0)}{esc(96)}v.mp4{esc(0)}: "
-        f"{esc(93)}moov atom not found{esc(0)}\n{esc(93)}Invalid data{esc(0)}"
+        f"{esc(93)}moov atom not found{esc(0)}\n{' ' * 22}{esc(93)}Invalid data{esc(0)}"
     )
 
 
@@ -129,3 +129,9 @@ def test_error_without_structure_is_all_red():
     assert f"{esc(91)}plain message{esc(0)}" in line
     assert f"{esc(91)}failed{esc(0)}" in ConsoleFormatter(color=True).format(
         record("failed", level=logging.ERROR))
+
+
+def test_continuation_lines_indent_under_message():
+    line = ConsoleFormatter(color=False).format(record("  %s", "one\ntwo"))
+    first, second = line.split("\n")
+    assert second == " " * (first.index("one")) + "two"
