@@ -1,6 +1,6 @@
 [project]
 name = "vcs-ng"
-version = "1.0.6"
+dynamic = ["version"]
 description = "Video contact sheet generator — a modern rewrite of Video Contact Sheet *NIX"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,8 +11,22 @@ dependencies = ["pillow>=10.0"]
 vcsng = "vcsng.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"  # version comes from the nearest vX.Y.Z git tag
+fallback-version = "0+unknown"  # building from a tree without git history
+
+[tool.uv]
+# uv caches builds of local projects keyed on these. Include the git commit and
+# tags (the version changes with them) and the sources (so `uv tool install .`
+# picks up uncommitted edits too).
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "src/**/*" },
+    { git = { commit = true, tags = true } },
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vcsng"]

@@ -1,21 +1,26 @@
 name: test
 
+# Runs on pushes to any branch except main; main's tests run inside release.yml,
+# which calls this workflow and releases only if it passes.
+
 on:
-  pull_request:
   push:
-    branches: [main]
+    branches-ignore: [main]
+  workflow_call:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # hatch-vcs derives the version from git tags
 
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.3  # no floating major tag; pin exact
 
       - name: Set up Python
         run: uv python install 3.11
