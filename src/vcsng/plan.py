@@ -18,6 +18,7 @@ from enum import Enum
 from pathlib import Path
 
 from .config import Settings
+from .console import FileName
 from .errors import OutputError, VcsngError
 from .output import resolve_output_path
 from .scan import Existing, check_existing, iter_videos
@@ -108,7 +109,7 @@ def _plan_scanned(video: Path, s: Settings) -> Job | Keep:
         return Job(video, out, Action.NEW)
     if status is Existing.BAD:
         log.warning("%s: existing %s is not a valid %s image; it will be set aside",
-                    video, out.name, s.format.upper())
+                    video, FileName(out.name), s.format.upper())
         return Job(video, out, Action.REPLACE_BAD)
     if s.regenerate:
         return Job(video, out, Action.REGENERATE)
@@ -116,12 +117,12 @@ def _plan_scanned(video: Path, s: Settings) -> Job | Keep:
         predicted = _predict_width(video, s)
         if predicted is not None and predicted < s.min_width:
             log.info("%s: existing %s is %dpx wide (< %d), but a new sheet would only be "
-                     "%dpx; keeping it", video, out.name, width, s.min_width, predicted)
+                     "%dpx; keeping it", video, FileName(out.name), width, s.min_width, predicted)
             return Keep.CANT_REACH_MIN_WIDTH
         log.info("%s: existing %s is %dpx wide (< %d); will regenerate",
-                 video, out.name, width, s.min_width)
+                 video, FileName(out.name), width, s.min_width)
         return Job(video, out, Action.REGENERATE)
-    log.debug("%s: up to date (%s, %dpx wide)", video, out.name, width)
+    log.debug("%s: up to date (%s, %dpx wide)", video, FileName(out.name), width)
     return Keep.UP_TO_DATE
 
 

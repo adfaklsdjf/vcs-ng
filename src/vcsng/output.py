@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 from .config import Settings
+from .console import FileName
 from .errors import OutputError, UsageError
 
 log = logging.getLogger("vcsng")
@@ -83,7 +84,7 @@ def save_sheet(img: Image.Image, target: Path, s: Settings) -> Path:
         if not s.overwrite and (target.exists() or target.is_symlink()):
             old = _old_path(target)
             target.rename(old)
-            log.info("moved %s -> %s", target, old.name)
+            log.info("moved %s -> %s", target, FileName(old.name))
         os.replace(tmp, target)
     except OSError as e:
         tmp.unlink(missing_ok=True)

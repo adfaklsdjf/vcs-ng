@@ -1,0 +1,108 @@
+"""Tests for console.py: timestamps, argument colouring and blank-line spacing."""
+
+from __future__ import annotations
+
+import io
+import logging
+import re
+from pathlib import Path
+
+import pytest
+
+from vcsng import console
+from vcsng.console import OK, ConsoleFormatter, ConsoleHandler, Figure, FileName
+
+STAMP = r"\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] "
+
+
+def record(msg, *args, level=logging.INFO, **extra):
+    r = logging.LogRecord("vcsng", level, __file__, 1, msg, args, None)
+    r.__dict__.update(extra)
+    return r
+
+
+def esc(code):
+    return f"\x1b[{code}m"
+
+
+def test_plain_output_has_iso_timestamp_and_no_escapes():
+    line = ConsoleFormatter(color=False).format(record("wrote %s (%dpx)", Path("a.jpg"), 640))
+    assert re.fullmatch(STAMP + r"wrote a\.jpg \(640px\)", line)
+
+
+def test_arguments_coloured_by_role():
+    line = ConsoleFormatter(color=True).format(
+        record("%s: %s at %s, %d frames in %.1fs", Path("v.mp4"), FileName("v.jpg"),
+               Figure("00:01:02"), 12, 3.25)
+    )
+    assert f"{esc(96)}v.mp4{esc(0)}" in line
+    assert f"{esc(96)}v.jpg{esc(0)}" in line
+    assert f"{esc(95)}00:01:02{esc(0)}" in line
+    assert f"{esc(95)}12{esc(0)} frames" in line
+    assert f"{esc(95)}3.2s{esc(0)}" in line  # unit suffix joins the figure
+
+
+def test_message_text_takes_level_or_tone_colour():
+    f = ConsoleFormatter(color=True)
+    assert f"{esc(93)}moved {esc(0)}" in f.format(record("moved %s", Path("x"), level=logging.WARNING))
+    assert f"{esc(91)}boom{esc(0)}" in f.format(record("boom", level=logging.ERROR))
+    assert f"{esc(92)}wrote {esc(0)}" in f.format(record("wrote %s", Path("x"), **OK))
+    assert f"{esc(37)}detail{esc(0)}" in f.format(record("detail", level=logging.DEBUG))
+
+
+def test_percent_literal_and_bad_args_fall_back():
+    f = ConsoleFormatter(color=True)
+    assert "50% of 4" in re.sub(r"\x1b\[\d+m", "", f.format(record("50%% of %d", 4)))
+    # A malformed call falls back to logging's own formatting, which raises as
+    # usual (the handler then reports it the way logging always does).
+    with pytest.raises(TypeError):
+        f.format(record("only %d", 1, 2))
+
+
+def run_handler(script):
+    stream = io.StringIO()
+    h = ConsoleHandler(stream, color=False)
+    log = logging.getLogger("vcsng.test_console")
+    log.addHandler(h)
+    log.propagate = False
+    log.setLevel(logging.INFO)
+    try:
+        script(log, h)
+    finally:
+        log.removeHandler(h)
+        log.propagate = True
+    return re.sub(STAMP, "", stream.getvalue())
+
+
+def test_spacing_around_and_between_sections():
+    def script(log, h):
+        log.info("start")
+        h.break_pending = True  # what console.section() does
+        h.break_pending = True  # repeated requests collapse
+        log.info("file one")
+        h.break_pending = True
+        log.info("file two")
+        h.finish()
+
+    assert run_handler(script) == "\nstart\n\nfile one\n\nfile two\n\n"
+
+
+def test_no_messages_no_blank_lines():
+    assert run_handler(lambda log, h: h.finish()) == ""
+
+
+def test_module_helpers_drive_the_installed_handler():
+    stream = io.StringIO()
+    root = logging.getLogger()
+    before = list(root.handlers), root.level
+    try:
+        console.setup(logging.INFO, stream)
+        log = logging.getLogger("vcsng")
+        log.info("a")
+        console.section()
+        log.info("b")
+        console.finish()
+    finally:
+        root.handlers[:] = before[0]
+        root.setLevel(before[1])
+    assert re.sub(STAMP, "", stream.getvalue()) == "\na\n\nb\n\n"
