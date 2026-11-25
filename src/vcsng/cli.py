@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import itertools
 import logging
-import sys
 import time
 from collections import Counter
 from pathlib import Path
 
-from . import __version__
+from . import __version__, console
+from .console import OK, Figure, FileName
 from .errors import SkippedInput, UsageError, VcsngError
 from .values import parse_aspect, parse_height, parse_percent_or_seconds, parse_timespec
 
@@ -186,11 +186,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     level = logging.DEBUG if args.verbose else logging.WARNING if args.quiet else logging.INFO
-    logging.basicConfig(level=level, format="%(message)s", stream=sys.stderr)
+    console.setup(level)
     # Pillow (and other libraries) emit noisy DEBUG records like "STREAM b'IDAT'";
     # keep third-party loggers quiet even when our own logger is at DEBUG.
     logging.getLogger("PIL").setLevel(logging.WARNING)
+    try:
+        return _run(parser, args)
+    finally:
+        console.finish()
 
+
+def _run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.init_config:
         return _init_config(parser, args.config)
 
@@ -230,15 +236,16 @@ def main(argv: list[str] | None = None) -> int:
 
     worst = 0
     tally: Counter[str] = Counter(up_to_date=plan.up_to_date, too_narrow=plan.too_narrow)
-    failed: list[tuple[Path, str]] = []
+    failed: list[tuple[Path, VcsngError]] = []
     for path, err in plan.failed:
         log.error("%s: %s", path, err)
-        failed.append((path, str(err)))
+        failed.append((path, err))
         worst = max(worst, err.exit_code)
     if batch:
         _log_plan(plan)
 
     for job in plan.jobs:
+        console.section()
         try:
             _run_job(job, settings)
             tally["generated" if job.action is Action.NEW else "regenerated"] += 1
@@ -247,10 +254,11 @@ def main(argv: list[str] | None = None) -> int:
             tally["skipped"] += 1
         except VcsngError as e:
             log.error("%s: %s", job.video, e)
-            failed.append((job.video, str(e)))
+            failed.append((job.video, e))
             worst = max(worst, e.exit_code)
 
     if batch:
+        console.section()
         _log_summary(tally, failed)
     return worst
 
@@ -266,7 +274,7 @@ def _init_config(parser: argparse.ArgumentParser, path: Path | None) -> int:
     except OSError as e:
         log.error("could not write %s: %s", path, e.strerror)
         return 1
-    log.info("wrote %s", path)
+    log.info("wrote %s", path, extra=OK)
     return 0
 
 
@@ -276,30 +284,38 @@ def _log_plan(plan) -> None:
 
     n = len(plan.jobs)
     new = sum(j.action is Action.NEW for j in plan.jobs)
-    parts = [f"{k} {label}" for k, label in (
+    counts = [(k, label) for k, label in (
         (new, "new"),
         (n - new, "replacing existing"),
         (plan.up_to_date, "up to date"),
         (plan.too_narrow, "kept, can't reach min-width"),
     ) if k]
-    detail = f" ({', '.join(parts)})" if parts else ""
-    log.info("generating %d contact sheet%s%s", n, "" if n == 1 else "s", detail)
+    detail = f" ({_count_list(counts)})" if counts else ""
+    log.info("generating %d contact sheet%s" + detail, n, "" if n == 1 else "s",
+             *(k for k, _ in counts))
 
 
-def _log_summary(tally: Counter, failed: list[tuple[Path, str]]) -> None:
-    parts = [f"{tally[k]} {label}" for k, label in (
+def _count_list(counts: list[tuple[int, str]]) -> str:
+    """Format-string fragment "%d new, %d up to date" for [(k, label)...];
+    counts stay log arguments so the console can style them as figures."""
+    return ", ".join(f"%d {label.replace('%', '%%')}" for _, label in counts)
+
+
+def _log_summary(tally: Counter, failed: list[tuple[Path, VcsngError]]) -> None:
+    counts = [(tally[k], label) for k, label in (
         ("generated", "generated"),
         ("regenerated", "regenerated"),
         ("up_to_date", "up to date"),
         ("too_narrow", "kept (can't reach min-width)"),
         ("skipped", "skipped"),
     ) if tally[k]]
-    parts.append(f"{len(failed)} failed")
-    log.info("done: %s", ", ".join(parts))
+    counts.append((len(failed), "failed"))
+    log.info("done: " + _count_list(counts), *(k for k, _ in counts),
+             extra=None if failed else OK)  # green only for a clean run
     if failed:
         log.error("failed (%d):", len(failed))
-        for path, msg in failed:
-            log.error("  %s: %s", path, msg)
+        for path, err in failed:
+            log.error("  %s: %s", path, err)
 
 
 def _log_parameters(file_path: Path, s, info, stamps) -> None:
@@ -344,11 +360,11 @@ def _render(file_path: Path, s):
     _log_parameters(file_path, s, info, stamps)
 
     total = len(stamps)
-    log.info("%s: capturing %d thumbnails", file_path.name, total)
+    log.info("%s: capturing %d thumbnails", FileName(file_path.name), total)
     counter = itertools.count(1)
 
     def on_capture(ts: float) -> None:
-        log.info("  [%d/%d] capturing %s", next(counter), total, pretty_stamp(ts))
+        log.info("  [%d/%d] capturing %s", next(counter), total, Figure(pretty_stamp(ts)))
 
     frames = capture_frames(file_path, stamps, workers=s.workers, on_capture=on_capture)
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
@@ -368,7 +384,7 @@ def _run_job(job, s) -> None:
     elapsed = time.monotonic() - start
     log.info(
         "wrote %s (%dx%d, %d captures, %.1fs)",
-        written, img.width, img.height, n_caps, elapsed,
+        written, img.width, img.height, n_caps, elapsed, extra=OK,
     )
 
 
@@ -379,8 +395,8 @@ def _set_aside_bad(out: Path) -> None:
     try:
         moved = set_aside(out)
     except OSError as e:
-        raise OutputError(f"could not rename {out}: {e}") from None
-    log.warning("moved %s -> %s", out, moved.name)
+        raise OutputError("could not rename %s", out, detail=str(e)) from None
+    log.warning("moved %s -> %s", out, FileName(moved.name))
 
 
 if __name__ == "__main__":

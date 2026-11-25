@@ -97,7 +97,7 @@ def check_existing(
     if not path.exists() and not path.is_symlink():
         return Existing.MISSING, None
     if path.is_dir():
-        raise OutputError(f"output path is a directory: {path}")
+        raise OutputError("output path is a directory: %s", path)
     if not path.is_file():
         return Existing.BAD, None
     expected = _PIL_FORMAT[fmt]
