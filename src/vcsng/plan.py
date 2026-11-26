@@ -18,7 +18,7 @@ from enum import Enum
 from pathlib import Path
 
 from .config import Settings
-from .console import FileName
+from .console import MUTED, FileName, Strong
 from .errors import OutputError, VcsngError
 from .output import resolve_output_path
 from .scan import Existing, check_existing, iter_videos
@@ -85,7 +85,7 @@ def build_plan(inputs: list[Input], s: Settings) -> Plan:
     plan = Plan()
     for inp in inputs:
         try:
-            job = _plan_scanned(inp.video, s) if inp.scanned else Job(
+            job = _plan_scanned(inp.video, s, len(plan.jobs) + 1) if inp.scanned else Job(
                 inp.video, resolve_output_path(inp.video, s), Action.NEW
             )
         except OutputError as e:
@@ -100,8 +100,10 @@ def build_plan(inputs: list[Input], s: Settings) -> Plan:
     return plan
 
 
-def _plan_scanned(video: Path, s: Settings) -> Job | Keep:
-    """Scanned videos get their sheet next to them."""
+def _plan_scanned(video: Path, s: Settings, seq: int) -> Job | Keep:
+    """Scanned videos get their sheet next to them. seq is the number this
+    video's job will have if it gets one (the [N] in "will regenerate [N]",
+    matching the [N/M] shown when it runs)."""
     out = resolve_output_path(video, s, base_dir=video.parent)
     status, width = check_existing(out, s.format, s.min_width)
 
@@ -117,10 +119,11 @@ def _plan_scanned(video: Path, s: Settings) -> Job | Keep:
         predicted = _predict_width(video, s)
         if predicted is not None and predicted < s.min_width:
             log.info("%s: existing %s is %dpx wide (< %d), but a new sheet would only be "
-                     "%dpx; keeping it", video, FileName(out.name), width, s.min_width, predicted)
+                     "%dpx; keeping it", video, FileName(out.name), width, s.min_width, predicted,
+                     extra=MUTED)
             return Keep.CANT_REACH_MIN_WIDTH
-        log.info("%s: existing %s is %dpx wide (< %d); will regenerate",
-                 video, FileName(out.name), width, s.min_width)
+        log.info("%s: existing %s is %dpx wide (< %d); %s", video, FileName(out.name),
+                 width, s.min_width, Strong(f"will regenerate [{seq}]"))
         return Job(video, out, Action.REGENERATE)
     log.debug("%s: up to date (%s, %dpx wide)", video, FileName(out.name), width)
     return Keep.UP_TO_DATE

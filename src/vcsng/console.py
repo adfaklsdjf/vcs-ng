@@ -3,7 +3,9 @@
 Modules keep logging as usual (`log.info("wrote %s (%dx%d)", path, w, h)`);
 this module decides how records look. Each %-argument is coloured by what it
 is: Paths and FileName strings as filenames, numbers and Figure strings as
-figures. Message text takes the colour of its level (or tone, see OK).
+figures, Strong strings in bold white. Message text takes the colour of its
+level (or tone, see OK). The MUTED tone greys out the whole line, arguments
+included, for things passed over (e.g. a sheet that's being kept).
 
 A VcsngError argument is rendered from its parts: its own message in the error
 colour (with its args styled as above) and any detail from an external tool in
@@ -36,13 +38,21 @@ class Figure(str):
     """A pre-formatted measurement, e.g. a duration or a video timestamp."""
 
 
+class Strong(str):
+    """Text that should stand out from the rest of its line, e.g. a decision."""
+
+
 # Pass as `extra=OK` to show an INFO message as a success.
 OK = {"tone": "ok"}
+# Pass as `extra=MUTED` to grey out a whole line, arguments and all.
+MUTED = {"tone": "muted"}
 
 # SGR codes. Bright ("light") variants of the 16 standard colours; 37 is the
-# ordinary grey and 90 dark grey. White (97) is deliberately unused for now.
+# ordinary grey and 90 dark grey; "1;97" is bold white.
 _PALETTE = {
     "time": "90",     # dark grey
+    "muted": "90",    # dark grey
+    "strong": "1;97", # bold white
     "file": "96",     # light cyan
     "figure": "95",   # light magenta
     "debug": "37",    # grey
@@ -60,6 +70,8 @@ _NUMERIC = set("diouxXeEfFgG")
 def _role(arg: object) -> str | None:
     if isinstance(arg, (PurePath, FileName)):
         return "file"
+    if isinstance(arg, Strong):
+        return "strong"
     if isinstance(arg, Figure) or (isinstance(arg, (int, float)) and not isinstance(arg, bool)):
         return "figure"
     return None
@@ -101,7 +113,7 @@ class ConsoleFormatter(logging.Formatter):
     def _body(self, record: logging.LogRecord) -> str:
         base = self._base_role(record)
         args = record.args
-        if not self.color or not args or isinstance(args, dict):
+        if not self.color or not args or isinstance(args, dict) or base == "muted":
             return self.paint(record.getMessage(), base)
         if base == "error" and any(isinstance(a, VcsngError) for a in args):
             base = None  # the error's own text carries the colour
