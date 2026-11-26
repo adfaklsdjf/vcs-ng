@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from vcsng import console
-from vcsng.console import OK, ConsoleFormatter, ConsoleHandler, Figure, FileName
+from vcsng.console import MUTED, OK, ConsoleFormatter, ConsoleHandler, Figure, FileName, Strong
 
 STAMP = r"\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] "
 
@@ -48,6 +48,17 @@ def test_message_text_takes_level_or_tone_colour():
     assert f"{esc(91)}boom{esc(0)}" in f.format(record("boom", level=logging.ERROR))
     assert f"{esc(92)}wrote {esc(0)}" in f.format(record("wrote %s", Path("x"), **OK))
     assert f"{esc(37)}detail{esc(0)}" in f.format(record("detail", level=logging.DEBUG))
+
+
+def test_strong_argument_is_bold_white():
+    line = ConsoleFormatter(color=True).format(record("x; %s", Strong("will regenerate [3]")))
+    assert f"{esc('1;97')}will regenerate [3]{esc(0)}" in line
+
+
+def test_muted_tone_greys_out_arguments_too():
+    line = ConsoleFormatter(color=True).format(
+        record("%s is %dpx; keeping it", FileName("v.jpg"), 640, **MUTED))
+    assert line.split(f"{esc(0)} ", 1)[1] == f"{esc(90)}v.jpg is 640px; keeping it{esc(0)}"
 
 
 def test_percent_literal_and_bad_args_fall_back():

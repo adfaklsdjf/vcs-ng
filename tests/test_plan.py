@@ -108,3 +108,16 @@ def test_plan_regenerate_skips_prediction(tree, monkeypatch):
     s = _settings(min_width=2000, regenerate=True)
     plan = build_plan(collect_inputs([tree], s, recursive=True), s)
     assert _actions(plan)["narrow"] is Action.REGENERATE
+
+
+def test_plan_numbers_regenerations_by_job_position(tree, monkeypatch, caplog):
+    """[N] is the job's position, so it matches the [N/M] shown when it runs;
+    jobs that print no line (new sheets) still take a number."""
+    import vcsng.plan
+
+    monkeypatch.setattr(vcsng.plan, "_predict_width", lambda video, s: 2400)
+    s = _settings(min_width=2000)
+    with caplog.at_level(logging.INFO, logger="vcsng"):
+        plan = build_plan(collect_inputs([tree], s, recursive=True), s)
+    n = [j.video.stem for j in plan.jobs].index("narrow") + 1
+    assert f"will regenerate [{n}]" in caplog.text

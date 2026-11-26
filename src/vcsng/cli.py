@@ -244,10 +244,10 @@ def _run(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if batch:
         _log_plan(plan)
 
-    for job in plan.jobs:
+    for i, job in enumerate(plan.jobs, 1):
         console.section()
         try:
-            _run_job(job, settings)
+            _run_job(job, settings, (i, len(plan.jobs)) if batch else None)
             tally["generated" if job.action is Action.NEW else "regenerated"] += 1
         except SkippedInput as e:
             log.info("%s: skipped: %s", job.video, e)
@@ -346,8 +346,9 @@ def _log_parameters(file_path: Path, s, info, stamps) -> None:
               s.bg_contact, s.bg_heading, s.fg_heading, s.bg_tstamps, s.fg_tstamps)
 
 
-def _render(file_path: Path, s):
-    """Probe, capture, and compose the sheet. Returns (image, capture count)."""
+def _render(file_path: Path, s, seq: tuple[int, int] | None):
+    """Probe, capture, and compose the sheet. Returns (image, capture count).
+    seq is (this job's number, job count) in a batch, shown as [N/M]."""
     from .aspect import resolve_aspect
     from .capture import capture_frames
     from .probe import probe
@@ -360,7 +361,8 @@ def _render(file_path: Path, s):
     _log_parameters(file_path, s, info, stamps)
 
     total = len(stamps)
-    log.info("%s: capturing %d thumbnails", FileName(file_path.name), total)
+    progress = "[%d/%d] " if seq else ""
+    log.info(progress + "thumbing %s: capturing %d thumbnails", *(seq or ()), file_path, total)
     counter = itertools.count(1)
 
     def on_capture(ts: float) -> None:
@@ -371,13 +373,13 @@ def _render(file_path: Path, s):
     return build_sheet(info, frames, s, aspect), total
 
 
-def _run_job(job, s) -> None:
+def _run_job(job, s, seq: tuple[int, int] | None) -> None:
     """Render job.video and write it to job.out (setting aside junk first)."""
     from .output import save_sheet
     from .plan import Action
 
     start = time.monotonic()
-    img, n_caps = _render(job.video, s)
+    img, n_caps = _render(job.video, s, seq)
     if job.action is Action.REPLACE_BAD:
         _set_aside_bad(job.out)  # only once the new sheet is ready to write
     written = save_sheet(img, job.out, s)
