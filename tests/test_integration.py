@@ -41,3 +41,9 @@ def test_capture_frames_on_capture_callback_fires_per_stamp(synthetic_video):
     # one callback per stamp, exactly the stamps we asked for (order may vary
     # across parallel workers, so compare as sets)
     assert sorted(seen) == stamps
+
+
+def test_capture_frames_shrinks_to_size(synthetic_video):
+    [(_, img)] = capture_frames(synthetic_video, [5.0], size=(64, 36))
+    assert img.size == (64, 36)
+    assert img.mode == "RGBA"

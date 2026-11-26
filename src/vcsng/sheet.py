@@ -36,8 +36,9 @@ Image.MAX_IMAGE_PIXELS = None
 # Shared by build_sheet and predict_sheet_width so the prediction can't drift
 # from what actually gets rendered.
 
-def _thumb_size(s: Settings, source_h: int, aspect: Fraction) -> tuple[int, int]:
-    """Thumbnail (w, h) before shadows; source_h is the captured frame height."""
+def thumb_size(s: Settings, source_h: int, aspect: Fraction) -> tuple[int, int]:
+    """Thumbnail (w, h) before shadows; source_h is the (rotation-corrected)
+    video height from the probe."""
     if isinstance(s.height, Percent):
         h = max(int(round(s.height.resolve(source_h))), 1)
     else:
@@ -61,7 +62,7 @@ def predict_sheet_width(info: VideoInfo, n_caps: int, s: Settings) -> int:
     from .aspect import resolve_aspect
 
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
-    cols, _, cell_w, _ = _grid(n_caps, _thumb_size(s, info.height, aspect), s)
+    cols, _, cell_w, _ = _grid(n_caps, thumb_size(s, info.height, aspect), s)
     grid_w = cell_w * cols
     return max(grid_w, _heading(info, s, grid_w).width)
 
@@ -121,10 +122,11 @@ def build_sheet(
     s: Settings,
     aspect: Fraction,
 ) -> Image.Image:
+    """Frames may arrive already shrunk to thumb_size (capture_frames does
+    this to keep memory down); any other size is resized here."""
     from .render import parse_color
 
-    source_h = next((im.height for _, im in frames if im is not None), info.height)
-    thumb_w, thumb_h = _thumb_size(s, source_h, aspect)
+    thumb_w, thumb_h = thumb_size(s, info.height, aspect)
     bg_contact = parse_color(s.bg_contact)
 
     ts_font = load_font(s.font_tstamps, scale_pts(s.pts_tstamps, thumb_h))
@@ -134,7 +136,9 @@ def build_sheet(
         if frame is None:
             tile = placeholder_tile((thumb_w, thumb_h))
         else:
-            tile = frame.convert("RGBA").resize((thumb_w, thumb_h), Image.LANCZOS)
+            tile = frame.convert("RGBA")
+            if tile.size != (thumb_w, thumb_h):
+                tile = tile.resize((thumb_w, thumb_h), Image.LANCZOS)
         if s.timestamps:
             apply_timestamp(
                 tile, pretty_stamp(stamp), ts_font, s.fg_tstamps, s.bg_tstamps,

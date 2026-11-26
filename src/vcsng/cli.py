@@ -346,13 +346,23 @@ def _log_parameters(file_path: Path, s, info, stamps) -> None:
               s.bg_contact, s.bg_heading, s.fg_heading, s.bg_tstamps, s.fg_tstamps)
 
 
+def _log_memory(stage: str) -> None:
+    from .memory import peak_usage
+    from .values import pretty_size
+
+    if log.isEnabledFor(logging.DEBUG):
+        own, child = peak_usage()
+        log.debug("  peak memory after %s: vcsng %s, largest ffmpeg %s", stage,
+                  Figure(pretty_size(own)), Figure(pretty_size(child)))
+
+
 def _render(file_path: Path, s, seq: tuple[int, int] | None):
     """Probe, capture, and compose the sheet. Returns (image, capture count).
     seq is (this job's number, job count) in a batch, shown as [N/M]."""
     from .aspect import resolve_aspect
     from .capture import capture_frames
     from .probe import probe
-    from .sheet import build_sheet
+    from .sheet import build_sheet, thumb_size
     from .timestamps import compute_stamps
     from .values import pretty_stamp
 
@@ -368,9 +378,13 @@ def _render(file_path: Path, s, seq: tuple[int, int] | None):
     def on_capture(ts: float) -> None:
         log.info("  [%d/%d] capturing %s", next(counter), total, Figure(pretty_stamp(ts)))
 
-    frames = capture_frames(file_path, stamps, workers=s.workers, on_capture=on_capture)
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
-    return build_sheet(info, frames, s, aspect), total
+    frames = capture_frames(file_path, stamps, workers=s.workers, on_capture=on_capture,
+                            size=thumb_size(s, info.height, aspect))
+    _log_memory("capture")
+    sheet = build_sheet(info, frames, s, aspect)
+    _log_memory("composing")
+    return sheet, total
 
 
 def _run_job(job, s, seq: tuple[int, int] | None) -> None:
@@ -383,6 +397,7 @@ def _run_job(job, s, seq: tuple[int, int] | None) -> None:
     if job.action is Action.REPLACE_BAD:
         _set_aside_bad(job.out)  # only once the new sheet is ready to write
     written = save_sheet(img, job.out, s)
+    _log_memory("saving")
     elapsed = time.monotonic() - start
     log.info(
         "wrote %s (%dx%d, %d captures, %.1fs)",
