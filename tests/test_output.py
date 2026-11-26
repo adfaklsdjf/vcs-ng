@@ -124,3 +124,14 @@ def test_save_sheet_jpeg_quality_param_accepted(tmp_path):
     assert written.exists()
     with Image.open(written) as reloaded:
         assert reloaded.mode in ("RGB", "L")
+
+
+def test_check_sheet_size_jpeg_limit():
+    from vcsng.errors import OutputError
+    from vcsng.output import JPEG_MAX_SIDE, check_sheet_size
+
+    jpeg, png = Settings(format="jpeg"), Settings(format="png")
+    check_sheet_size((2000, JPEG_MAX_SIDE), jpeg)
+    with pytest.raises(OutputError, match="over JPEG"):
+        check_sheet_size((2000, JPEG_MAX_SIDE + 1), jpeg)
+    check_sheet_size((2000, JPEG_MAX_SIDE + 1), png)
