@@ -1,8 +1,35 @@
 # New asks from Brian
 
-(none pending)
-
 When this section isn't empty, raise the items with Brian early in a session if Brian hasn't brought them up first, and work them in or ask how to handle them. Remove an item once it's done or dropped.
+
+1. when determining whether to regenerate - use dark grey vs white (bold if possible) to visually distinguish files skipped vs regenerated
+  a. need: "will regenerate" white
+  b. need: "but a new sheet would be only ...; keeping it" dark grey
+  c. nice to have - the pixel figure at "..." in #1b is also dark grey - don't restructure/contort code to accommodate
+  d. nice to have: the shared text starting with "existing.." is dark grey when we are skipping/keeping - i.e. same text is grey vs multiple colors depending on whether the current item is going to be regenerated or not - don't restructure/contort code to accommodate
+2. when deciding a file will be regenerated, add a "[N]" indicator of how big the list is at this point
+  a. iirc, at least in non-verbose mode, it doesn't print lines for videos without any existing sheet - they increase the videos-to-generate count but there is no line printed to display that count.  that would mean the [N] indicators would be non-sequential/have gaps.  that's okay.  i don't remember if there's verbose mode that prints every file that will be regenerated, but if there is, we could print it there.
+  b. #2 seems like it should be simple, but if it's not, don't make it complicated just for this
+3. after we've walked the list and we know how many sheets we're going to re-generate, print which sheet we're on like we do with captures
+
+example:
+---
+[2026-11-26 07:46:46] .: found 41 videos
+...
+[2026-11-26 07:46:49] DIR/FILENAME.mp4: existing FILENAME-ss.jpg is 1142px wide (< 1800); will regenerate [1]
+                                                                                          ^^^^^^^^^^^^^^^^^^^ white (and bold if possible)
+[2026-11-26 07:46:49] DIR/FILENAME.mp4: existing FILENAME-ss.jpg is 1773px wide (< 1800), but a new sheet would only be 1773px; keeping it
+                                        ^^^^^^^^^^^^^^^^ dark grey if easy ^^^^^^^^^^^^^^ ^^^^^^^^^^^^ ALL DARK GREY ^^         ^^^^^^^^^^  number grey too if easy
+...
+[2026-11-26 07:46:57] DIR/FILENAME.mp4: existing FILENAME-ss.jpg is 1142px wide (< 1800); will regenerate [35]
+[2026-11-26 07:46:57] DIR/FILENAME.mp4: existing FILENAME-ss.jpg is 1773px wide (< 1800), but a new sheet would only be 1773px; keeping it
+[2026-11-26 07:46:57] generating 35 contact sheets (35 replacing existing, 2 up to date, 4 kept, can't reach min-width)
+
+[2026-11-26 07:46:57] [1/35] thumbing DIR/FILENAME.mp4: capturing 69 thumbnails
+                      ^^^^^^ ^^^^^^^^^^^^ - add "thumbing <dir>"
+                        |
+                        +-- add file sequence
+---
 
 # Who this is for
 
