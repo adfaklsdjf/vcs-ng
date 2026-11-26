@@ -134,7 +134,7 @@ def _predict_width(video: Path, s: Settings) -> int | None:
     captures). None if it can't be predicted; the render will then surface
     whatever the problem is."""
     from .probe import probe
-    from .sheet import predict_sheet_width
+    from .sheet import predict_sheet_size
     from .timestamps import compute_stamps
 
     try:
@@ -143,4 +143,4 @@ def _predict_width(video: Path, s: Settings) -> int | None:
     except VcsngError as e:
         log.debug("%s: can't predict sheet width: %s", video, e)
         return None
-    return predict_sheet_width(info, n_caps, s)
+    return predict_sheet_size(info, n_caps, s)[0]

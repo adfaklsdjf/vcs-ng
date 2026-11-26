@@ -90,3 +90,7 @@ uv run pytest
 ```
 
 Every push to `main` is tested and released automatically. The version comes from git tags, so there is no version number to edit; see `.github/workflows/release.yml`.
+
+### Possible future optimizations
+
+- **Memory while composing.** Frames are shrunk to thumbnails as they're captured, so capture memory stays small, but `build_sheet` still makes several full-size copies of the sheet (grid, widened grid, final canvas, plus the RGB conversion when saving JPEG). For a 718-capture sheet (3546x40185) that peaked at about 3.4 GB. Drawing everything straight onto one final canvas would roughly halve that. Run with `-v` to see peak memory after capture, composing and saving.

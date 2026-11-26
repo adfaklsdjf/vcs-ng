@@ -16,6 +16,7 @@ from .render import (
     apply_timestamp,
     drop_shadow,
     heading_block,
+    parse_color,
     placeholder_tile,
     scale_pts,
     shadow_growth,
@@ -33,7 +34,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 
 # --- geometry -------------------------------------------------------------
-# Shared by build_sheet and predict_sheet_width so the prediction can't drift
+# Shared by build_sheet and predict_sheet_size so the prediction can't drift
 # from what actually gets rendered.
 
 def thumb_size(s: Settings, source_h: int, aspect: Fraction) -> tuple[int, int]:
@@ -57,14 +58,34 @@ def _grid(n: int, thumb: tuple[int, int], s: Settings) -> tuple[int, int, int, i
     return cols, rows, tile_w + 2 * s.padding, tile_h + 2 * s.padding
 
 
-def predict_sheet_width(info: VideoInfo, n_caps: int, s: Settings) -> int:
-    """Width build_sheet would produce for this video, without capturing frames."""
+def predict_sheet_size(info: VideoInfo, n_caps: int, s: Settings) -> tuple[int, int]:
+    """(width, height) build_sheet would produce for this video, without
+    capturing frames. Renders only the (small) heading, title and footer."""
     from .aspect import resolve_aspect
 
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
-    cols, _, cell_w, _ = _grid(n_caps, thumb_size(s, info.height, aspect), s)
-    grid_w = cell_w * cols
-    return max(grid_w, _heading(info, s, grid_w).width)
+    cols, rows, cell_w, cell_h = _grid(n_caps, thumb_size(s, info.height, aspect), s)
+    sheet_w, above, below = _surround(info, s, cell_w * cols)
+    return sheet_w, sum(p.height for p in above + below) + max(cell_h * rows, 1)
+
+
+def _surround(
+    info, s: Settings, grid_w: int
+) -> tuple[int, list[Image.Image], list[Image.Image]]:
+    """(sheet width, parts above the grid, parts below it), all at sheet width."""
+    sheet_w = max(grid_w, _heading(info, s, grid_w).width)
+    # re-render the heading at the final width
+    above = [_widen(_heading(info, s, sheet_w), sheet_w, parse_color(s.bg_heading))]
+    if s.title:
+        tfont = load_font(s.font_title, s.pts_title)
+        title = text_block(
+            [s.title], tfont, s.fg_title, s.bg_title, sheet_w,
+            align="center", pad=(0, 6, 0, 6),
+        )
+        above.append(_widen(title, sheet_w, parse_color(s.bg_title)))
+    footer = _footer(s, sheet_w)
+    below = [_widen(footer, sheet_w, parse_color(s.bg_sign))] if footer is not None else []
+    return sheet_w, above, below
 
 
 def _heading(info, s: Settings, width: int) -> Image.Image:
@@ -124,8 +145,6 @@ def build_sheet(
 ) -> Image.Image:
     """Frames may arrive already shrunk to thumb_size (capture_frames does
     this to keep memory down); any other size is resized here."""
-    from .render import parse_color
-
     thumb_w, thumb_h = thumb_size(s, info.height, aspect)
     bg_contact = parse_color(s.bg_contact)
 
@@ -158,22 +177,8 @@ def build_sheet(
         y = r * cell_h + s.padding
         grid.alpha_composite(tile, (x, y))
 
-    heading = _heading(info, s, grid_w)
-    sheet_w = max(grid_w, heading.width)
-    heading = _heading(info, s, sheet_w)  # re-render at final width
-
-    parts: list[Image.Image] = [_widen(heading, sheet_w, parse_color(s.bg_heading))]
-    if s.title:
-        tfont = load_font(s.font_title, s.pts_title)
-        title = text_block(
-            [s.title], tfont, s.fg_title, s.bg_title, sheet_w,
-            align="center", pad=(0, 6, 0, 6),
-        )
-        parts.append(_widen(title, sheet_w, parse_color(s.bg_title)))
-    parts.append(_widen(grid, sheet_w, bg_contact))
-    footer = _footer(s, sheet_w)
-    if footer is not None:
-        parts.append(_widen(footer, sheet_w, parse_color(s.bg_sign)))
+    sheet_w, above, below = _surround(info, s, grid_w)
+    parts = [*above, _widen(grid, sheet_w, bg_contact), *below]
 
     total_h = sum(p.height for p in parts)
     sheet = Image.new("RGBA", (sheet_w, max(total_h, 1)), bg_contact)

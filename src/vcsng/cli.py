@@ -359,14 +359,16 @@ def _render(file_path: Path, s, seq: tuple[int, int] | None):
     seq is (this job's number, job count) in a batch, shown as [N/M]."""
     from .aspect import resolve_aspect
     from .capture import capture_frames
+    from .output import check_sheet_size
     from .probe import probe
-    from .sheet import build_sheet, thumb_size
+    from .sheet import build_sheet, predict_sheet_size, thumb_size
     from .timestamps import compute_stamps
     from .values import pretty_stamp
 
     info = probe(file_path)
     stamps = compute_stamps(info.duration, s)
     _log_parameters(file_path, s, info, stamps)
+    check_sheet_size(predict_sheet_size(info, len(stamps), s), s)
 
     total = len(stamps)
     progress = "[%d/%d] " if seq else ""

@@ -299,7 +299,7 @@ def test_tstamp_padding_from_config(tmp_path):
     assert (s.tstamp_pad_x, s.tstamp_pad_y) == (3, 8)
 
 
-# --- predict_sheet_width ----------------------------------------------------
+# --- predict_sheet_size -----------------------------------------------------
 
 @pytest.mark.parametrize("n_caps", [1, 3, 7])
 @pytest.mark.parametrize("settings", [
@@ -308,14 +308,15 @@ def test_tstamp_padding_from_config(tmp_path):
     {"columns": 6, "height": 90, "padding": 5},
     {"columns": 2, "height": Percent(50.0), "aspect": "keep"},
     {"columns": 1, "height": 30, "aspect": Fraction(4, 3)},  # heading wider than grid
+    {"title": "A title", "anonymous": False, "credit": True},  # title + two-line footer
 ])
-def test_predict_sheet_width_matches_render(n_caps, settings):
+def test_predict_sheet_size_matches_render(n_caps, settings):
     from vcsng.aspect import resolve_aspect
-    from vcsng.sheet import predict_sheet_width
+    from vcsng.sheet import predict_sheet_size
 
     info = _info()
     s = Settings(**settings)
     frames = [(float(i), Image.new("RGB", (info.width, info.height))) for i in range(n_caps)]
     aspect = resolve_aspect(info.width, info.height, info.dar, s.aspect)
     sheet = build_sheet(info, frames, s, aspect)
-    assert predict_sheet_width(info, n_caps, s) == sheet.width
+    assert predict_sheet_size(info, n_caps, s) == sheet.size

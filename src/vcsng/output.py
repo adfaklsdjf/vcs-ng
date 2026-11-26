@@ -15,8 +15,22 @@ from .errors import OutputError, UsageError
 
 log = logging.getLogger("vcsng")
 
+JPEG_MAX_SIDE = 65500  # libjpeg's limit; Pillow fails with "broken data stream"
+
 _TOKEN_RE = re.compile(r"\{(\w+)\}")
 _VALID_TOKENS = {"stem", "name", "dir", "ext"}
+
+
+def check_sheet_size(size: tuple[int, int], s: Settings) -> None:
+    """Fail up front, before any capturing, if the format can't hold a sheet
+    this size (e.g. a very long video, or one whose length is misreported)."""
+    w, h = size
+    if s.format == "jpeg" and max(w, h) > JPEG_MAX_SIDE:
+        raise OutputError(
+            "sheet would be %dx%dpx, over JPEG's %dpx limit; try fewer captures "
+            "(-n/-i), a smaller --height, more --columns, or -f png",
+            w, h, JPEG_MAX_SIDE,
+        )
 
 
 def resolve_output_path(input_path: Path, s: Settings, base_dir: Path | None = None) -> Path:
