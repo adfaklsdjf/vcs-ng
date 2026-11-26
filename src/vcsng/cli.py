@@ -351,9 +351,7 @@ def _log_memory(stage: str) -> None:
     from .values import pretty_size
 
     if log.isEnabledFor(logging.DEBUG):
-        own, child = peak_usage()
-        log.debug("  peak memory after %s: vcsng %s, largest ffmpeg %s", stage,
-                  Figure(pretty_size(own)), Figure(pretty_size(child)))
+        log.debug("  peak memory after %s: %s", stage, Figure(pretty_size(peak_usage())))
 
 
 def _render(file_path: Path, s, seq: tuple[int, int] | None):
